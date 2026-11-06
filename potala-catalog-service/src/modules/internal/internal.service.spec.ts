@@ -9,7 +9,7 @@ describe('InternalService', () => {
       const prisma = createPrismaMock();
       prisma.productVariant.findMany.mockResolvedValue([
         {
-          id: 'v1',
+          id: '00000000-0000-4000-8000-000000000001',
           sku: 'SKU-1',
           name: 'Padrão',
           priceCents: null,
@@ -23,7 +23,7 @@ describe('InternalService', () => {
           inventory: { quantity: 10, reservedQuantity: 3 },
         },
         {
-          id: 'v2',
+          id: '00000000-0000-4000-8000-000000000002',
           sku: 'SKU-2',
           name: 'Grande',
           priceCents: 2500,
@@ -42,11 +42,11 @@ describe('InternalService', () => {
         new InventoryService(prisma),
       );
 
-      const result = await service.resolveVariants(['v1', 'v2']);
+      const result = await service.resolveVariants(['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002']);
 
       expect(result).toEqual([
         {
-          variantId: 'v1',
+          variantId: '00000000-0000-4000-8000-000000000001',
           productId: 'p1',
           sellerId: 's1',
           productStatus: 'ACTIVE',
@@ -57,7 +57,7 @@ describe('InternalService', () => {
           availableQuantity: 7,
         },
         {
-          variantId: 'v2',
+          variantId: '00000000-0000-4000-8000-000000000002',
           productId: 'p1',
           sellerId: 's1',
           productStatus: 'ACTIVE',
@@ -85,13 +85,13 @@ describe('InternalService', () => {
     it('reserves every item inside a single transaction', async () => {
       const prisma = createPrismaMock();
       prisma.$queryRaw.mockResolvedValue([
-        { variante_id: 'v1', quantidade: 10, quantidade_reservada: 4 },
+        { variante_id: '00000000-0000-4000-8000-000000000001', quantidade: 10, quantidade_reservada: 4 },
       ]);
       const service = new InternalService(prisma, new InventoryService(prisma));
 
       const result = await service.reserveBatch([
-        { variantId: 'v1', quantity: 1 },
-        { variantId: 'v2', quantity: 2 },
+        { variantId: '00000000-0000-4000-8000-000000000001', quantity: 1 },
+        { variantId: '00000000-0000-4000-8000-000000000002', quantity: 2 },
       ]);
 
       expect(prisma.$transaction).toHaveBeenCalled();
@@ -105,7 +105,7 @@ describe('InternalService', () => {
       // array order: first call -> v1 (succeeds), second call -> v2 (fails).
       prisma.$queryRaw
         .mockResolvedValueOnce([
-          { variante_id: 'v1', quantidade: 10, quantidade_reservada: 4 },
+          { variante_id: '00000000-0000-4000-8000-000000000001', quantidade: 10, quantidade_reservada: 4 },
         ])
         .mockResolvedValueOnce([]);
       prisma.productVariant.findUnique.mockResolvedValue({
@@ -115,8 +115,8 @@ describe('InternalService', () => {
 
       await expect(
         service.reserveBatch([
-          { variantId: 'v1', quantity: 1 },
-          { variantId: 'v2', quantity: 999 },
+          { variantId: '00000000-0000-4000-8000-000000000001', quantity: 1 },
+          { variantId: '00000000-0000-4000-8000-000000000002', quantity: 999 },
         ]),
       ).rejects.toThrow(InsufficientStockException);
     });

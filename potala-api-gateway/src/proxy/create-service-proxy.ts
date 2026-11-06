@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { Request } from 'express';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 
 export interface ServiceProxyOptions {
@@ -37,10 +38,17 @@ export function createServiceProxy({
   const options: Options = {
     target,
     changeOrigin: true,
-    xfwd: true,
+    xfwd: false,
     proxyTimeout: timeoutMs,
     timeout: timeoutMs,
     on: {
+      proxyReq: (proxyReq, req) => {
+        // Resolve the original trusted header before adding another hop.
+        // xfwd must stay off: it mutates req.headers before this callback.
+        const clientIp = (req as Request).ip ?? req.socket.remoteAddress;
+        if (clientIp) proxyReq.setHeader('x-forwarded-for', clientIp);
+        proxyReq.setHeader('x-forwarded-proto', (req as Request).protocol);
+      },
       proxyRes: (proxyRes, req) => {
         logger.log(`${req.method} ${req.url} -> ${proxyRes.statusCode}`);
       },

@@ -1,0 +1,43 @@
+# Review instance capacity and cost before creating this service.
+# Deploy only against homologation credentials until the cutover gate is met.
+services:
+  - type: web
+    name: potala-marketplace-homolog
+    runtime: docker
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: .
+    autoDeploy: false
+    healthCheckPath: /api/v1/health/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '10000'
+      - key: FRONTEND_URL
+        sync: false
+      - key: SESSION_COOKIE_NAME
+        value: potala_session
+      - key: SESSION_COOKIE_SECURE
+        value: 'true'
+      - key: IDENTITY_DATABASE_URL
+        sync: false
+      - key: IDENTITY_DIRECT_URL
+        sync: false
+      - key: SELLERS_DATABASE_URL
+        sync: false
+      - key: SELLERS_DIRECT_URL
+        sync: false
+      - key: CATALOG_DATABASE_URL
+        sync: false
+      - key: CATALOG_DIRECT_URL
+        sync: false
+      - key: ORDERS_DATABASE_URL
+        sync: false
+      - key: ORDERS_DIRECT_URL
+        sync: false
+      - key: IDENTITY_INTERNAL_API_KEY
+        generateValue: true
+      - key: SELLERS_INTERNAL_API_KEY
+        generateValue: true
+      - key: CATALOG_INTERNAL_API_KEY
+        generateValue: true

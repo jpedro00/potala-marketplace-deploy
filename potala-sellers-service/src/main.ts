@@ -64,8 +64,9 @@ async function bootstrap(): Promise<void> {
   }
 
   const port = config.get('port', { infer: true });
-  await app.listen(port, '0.0.0.0');
-  logger.log(`sellers-service listening on 0.0.0.0:${port}`);
+  const host = process.env.HOST ?? '0.0.0.0';
+  await app.listen(port, host);
+  logger.log(`sellers-service listening on ${host}:${port}`);
 }
 
 void bootstrap();

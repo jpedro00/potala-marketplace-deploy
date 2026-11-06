@@ -5,6 +5,8 @@ const baseEnv = {
   FRONTEND_URL: 'http://localhost:3000',
   IDENTITY_SERVICE_URL: 'http://localhost:3001',
   SELLERS_SERVICE_URL: 'http://localhost:3002',
+  CATALOG_SERVICE_URL: 'http://localhost:3003',
+  ORDERS_SERVICE_URL: 'http://localhost:3004',
 };
 
 describe('validateEnv', () => {
@@ -17,6 +19,8 @@ describe('validateEnv', () => {
       frontendUrl: 'http://localhost:3000',
       identityServiceUrl: 'http://localhost:3001',
       sellersServiceUrl: 'http://localhost:3002',
+      catalogServiceUrl: 'http://localhost:3003',
+      ordersServiceUrl: 'http://localhost:3004',
       proxyTimeoutMs: 10_000,
       healthCheckTimeoutMs: 3_000,
       rateLimit: { windowMs: 60_000, max: 300 },
@@ -101,9 +105,9 @@ describe('validateEnv', () => {
     });
 
     it('rejects a max below 1', () => {
-      expect(() =>
-        validateEnv({ ...baseEnv, RATE_LIMIT_MAX: '0' }),
-      ).toThrow(/RATE_LIMIT_MAX/);
+      expect(() => validateEnv({ ...baseEnv, RATE_LIMIT_MAX: '0' })).toThrow(
+        /RATE_LIMIT_MAX/,
+      );
     });
   });
 });

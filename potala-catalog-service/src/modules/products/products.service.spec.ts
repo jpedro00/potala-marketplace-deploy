@@ -300,7 +300,7 @@ describe('ProductsService getForSeller tenant isolation', () => {
 });
 
 describe('ProductsService updateVariantStockForSeller', () => {
-  const VARIANT_ID = '00000000-0000-4000-8000-0000000000v1';
+  const VARIANT_ID = '00000000-0000-4000-8000-000000000001';
 
   it('scopes the ownership check by sellerId AND productId on the variant itself', async () => {
     const prisma = createPrismaMock();

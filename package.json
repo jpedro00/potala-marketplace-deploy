@@ -1,0 +1,12 @@
+{
+  "name": "potala-marketplace-deploy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22 <23" },
+  "scripts": {
+    "test": "node --test deploy/render/test/*.test.mjs",
+    "start": "node deploy/render/start-services.mjs",
+    "check:config": "node deploy/render/start-services.mjs --check"
+  }
+}

@@ -37,6 +37,8 @@ export type PrismaMock = {
 
 export function createPrismaMock(): PrismaMock & PrismaService {
   const tx = {
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     category: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
@@ -68,8 +70,6 @@ export function createPrismaMock(): PrismaMock & PrismaService {
 
   const prisma = {
     ...tx,
-    $queryRaw: jest.fn(),
-    $executeRaw: jest.fn(),
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) =>
       callback(tx),
     ),
