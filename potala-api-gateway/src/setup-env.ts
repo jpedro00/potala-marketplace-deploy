@@ -1,0 +1,9 @@
+process.env.NODE_ENV ??= 'test';
+process.env.PORT ??= '8080';
+process.env.FRONTEND_URL ??= 'http://localhost:3000';
+process.env.IDENTITY_SERVICE_URL ??= 'http://localhost:3001';
+process.env.SELLERS_SERVICE_URL ??= 'http://localhost:3002';
+process.env.PROXY_TIMEOUT_MS ??= '10000';
+process.env.HEALTH_CHECK_TIMEOUT_MS ??= '3000';
+process.env.RATE_LIMIT_WINDOW_MS ??= '60000';
+process.env.RATE_LIMIT_MAX ??= '300';

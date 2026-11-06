@@ -1,0 +1,130 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// Este serviço é o único dono do schema Postgres "sellers" no banco Supabase
+// compartilhado. Nenhuma outra tabela do marketplace vive aqui, e este schema
+// não referencia tabelas de outros serviços por FK — ver
+// docs/internal-api-contract.md para como este serviço valida um userId
+// (sempre por chamada HTTP a identity-service, nunca por FK cross-schema).
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["sellers"]
+}
+
+// ---------------------------------------------------------------------------
+// Sellers (lojas e vínculos de propriedade/gestão)
+// Nomes físicos em português via @map / @@map, como no monólito de origem.
+// ---------------------------------------------------------------------------
+
+enum SellerStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+
+  @@schema("sellers")
+}
+
+enum SellerMembershipRole {
+  OWNER
+  MANAGER
+  STAFF
+
+  @@schema("sellers")
+}
+
+enum DocumentType {
+  CPF
+  CNPJ
+
+  @@schema("sellers")
+}
+
+model Seller {
+  id             String       @id @default(uuid()) @db.Uuid
+  legalName      String       @map("razao_social")
+  tradeName      String       @map("nome_fantasia")
+  slug           String       @unique
+  documentType   DocumentType @map("tipo_documento")
+  documentNumber String       @map("numero_documento")
+  email          String
+  phone          String       @map("telefone")
+  description    String?      @map("descricao")
+  status         SellerStatus @default(PENDING)
+  statusReason   String?      @map("motivo_status")
+  reviewedAt     DateTime?    @map("revisado_em")
+  /// Referência solta (UUID) a identity.usuarios — sem FK cross-schema. O
+  /// admin que revisou a loja é validado pela sessão, não por integridade
+  /// referencial do Postgres.
+  reviewedByUserId String?    @map("revisado_por_usuario_id") @db.Uuid
+  /// Comissão do marketplace em pontos-base (1000 = 10%). Nulo enquanto
+  /// indefinido/PENDING. CHECK no Postgres: comissao_bps IS NULL OR
+  /// (comissao_bps >= 0 AND comissao_bps <= 10000). Sem default de aplicação
+  /// (não é 10%) — mesma regra do monólito de origem.
+  commissionBps Int?          @map("comissao_bps")
+  ratingAverage Decimal       @default(0) @map("media_avaliacoes") @db.Decimal(3, 2)
+  createdAt     DateTime      @default(now()) @map("criado_em")
+  updatedAt     DateTime      @updatedAt @map("atualizado_em")
+
+  memberships SellerMembership[]
+
+  // Sem relação com Product/SellerOrder aqui: pertencem a catalog-service e
+  // orders-service (schemas separados, ainda não construídos). Eles guardam
+  // apenas sellerId (UUID solto, sem FK) e resolvem a loja via chamada a
+  // este serviço quando precisarem — ver docs/internal-api-contract.md.
+
+  @@unique([documentType, documentNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@index([reviewedByUserId])
+  @@map("vendedores")
+  @@schema("sellers")
+}
+
+model SellerMembership {
+  id       String               @id @default(uuid()) @db.Uuid
+  /// Referência solta (UUID) a identity.usuarios — sem FK cross-schema.
+  /// Único: um usuário tem no máximo um vínculo de loja por enquanto (mesmo
+  /// modelo 1:1 owner do monólito de origem).
+  userId   String               @unique @map("usuario_id") @db.Uuid
+  sellerId String               @map("vendedor_id") @db.Uuid
+  role     SellerMembershipRole @map("papel")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sellerId])
+  @@index([sellerId])
+  @@map("membros_vendedor")
+  @@schema("sellers")
+}
+
+// ---------------------------------------------------------------------------
+// Auditoria (local a este schema — cada serviço audita as próprias ações
+// administrativas; não há uma tabela de auditoria compartilhada entre
+// serviços, mesma decisão de "sem estado compartilhado cross-schema")
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id     String  @id @default(uuid()) @db.Uuid
+  /// Referência solta (UUID) a identity.usuarios (quem executou a ação
+  /// administrativa) — sem FK cross-schema.
+  actorUserId String? @map("ator_usuario_id") @db.Uuid
+  action      String  @map("acao")
+  entityType  String  @map("tipo_entidade")
+  entityId    String  @map("entidade_id")
+  metadata    Json?   @map("metadados")
+  createdAt   DateTime @default(now()) @map("criado_em")
+
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("logs_auditoria")
+  @@schema("sellers")
+}

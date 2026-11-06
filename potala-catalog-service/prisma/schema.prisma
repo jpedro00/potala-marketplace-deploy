@@ -1,0 +1,219 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// Este serviço é o único dono do schema Postgres "catalog" no banco Supabase
+// compartilhado. Nenhuma outra tabela do marketplace vive aqui, e este schema
+// não referencia tabelas de outros serviços por FK — sellerId (em Product e
+// ProductVariant) é uma referência solta (UUID), sempre resolvida por
+// SellerContextGuard via chamada de rede a sellers-service antes de chegar
+// aqui, nunca por FK cross-schema. Ver docs/internal-api-contract.md.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["catalog"]
+}
+
+// ---------------------------------------------------------------------------
+// Categorias, produtos, variantes e estoque
+// Nomes físicos em português via @map / @@map, como no monólito de origem.
+// Fielmente portado de marketing-place-potala-backend-main (modules/categories,
+// modules/products, modules/inventory) — ver README.md para o que muda e o
+// que fica igual na decomposição.
+// ---------------------------------------------------------------------------
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("catalog")
+}
+
+enum ProductStatus {
+  DRAFT
+  REVIEW
+  ACTIVE
+  REJECTED
+  INACTIVE
+
+  @@schema("catalog")
+}
+
+model Category {
+  id        String         @id @default(uuid()) @db.Uuid
+  name      String         @map("nome")
+  slug      String         @unique
+  parentId  String?        @map("categoria_pai_id") @db.Uuid
+  status    CategoryStatus @default(ACTIVE)
+  createdAt DateTime       @default(now()) @map("criado_em")
+  updatedAt DateTime       @updatedAt @map("atualizado_em")
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@index([parentId])
+  @@index([status])
+  @@map("categorias")
+  @@schema("catalog")
+}
+
+model Product {
+  id          String        @id @default(uuid()) @db.Uuid
+  /// Referência solta (UUID) a sellers.vendedores — sem FK cross-schema.
+  /// Chega aqui já resolvido e confiável por SellerContextGuard (que por sua
+  /// vez confia em sellers-service, chamado via rede) — nunca é entrada
+  /// bruta de cliente. Ver docs/internal-api-contract.md.
+  sellerId    String        @map("vendedor_id") @db.Uuid
+  categoryId  String        @map("categoria_id") @db.Uuid
+  title       String        @map("titulo")
+  slug        String
+  description String        @map("descricao")
+  /// Catalog list price in cents. CHECK: preco_centavos >= 0 (free/promo 0 allowed).
+  priceCents  Int           @map("preco_centavos")
+  status      ProductStatus @default(DRAFT)
+  featured    Boolean       @default(false) @map("destaque")
+  createdAt   DateTime      @default(now()) @map("criado_em")
+  updatedAt   DateTime      @updatedAt @map("atualizado_em")
+
+  category Category         @relation(fields: [categoryId], references: [id])
+  images   ProductImage[]
+  variants ProductVariant[]
+
+  // Sem relação com OrderItem aqui: pertence a orders-service (schema
+  // separado, ainda não construído). Quando existir, ele vai guardar apenas
+  // productId/variantId (UUID solto, sem FK) e resolver o produto via
+  // chamada a este serviço quando precisar — mesmo padrão já usado entre
+  // identity-service e sellers-service.
+
+  @@unique([sellerId, slug])
+  @@unique([id, sellerId], map: "produtos_id_vendedor_id_key")
+  @@index([sellerId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("produtos")
+  @@schema("catalog")
+}
+
+model ProductImage {
+  id        String  @id @default(uuid()) @db.Uuid
+  productId String  @map("produto_id") @db.Uuid
+  url       String
+  alt       String? @map("texto_alternativo")
+  position  Int     @default(0) @map("posicao")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("imagens_produto")
+  @@schema("catalog")
+}
+
+/// sellerId stays on the variant so SKU can be unique per store: @@unique([sellerId, sku]).
+/// Integrity ProductVariant.sellerId == Product.sellerId is enforced by PostgreSQL:
+/// composite FK (productId, sellerId) → Product(id, sellerId).
+/// Direct ProductVariant → Seller relation is omitted: sellers.vendedores lives
+/// in a different schema (no cross-schema FK), AND sellerId cannot participate
+/// in two FKs even if it were local (same reasoning as the origin monolith).
+/// Seller integrity is transitive: Variant → Product → (validated) sellerId.
+model ProductVariant {
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @map("produto_id") @db.Uuid
+  sellerId   String   @map("vendedor_id") @db.Uuid
+  sku        String
+  name       String   @map("nome")
+  /// Optional override of Product.priceCents. CHECK: NULL OR preco_centavos >= 0.
+  priceCents Int?     @map("preco_centavos")
+  active     Boolean  @default(true) @map("ativo")
+  createdAt  DateTime @default(now()) @map("criado_em")
+  updatedAt  DateTime @updatedAt @map("atualizado_em")
+
+  product   Product    @relation(fields: [productId, sellerId], references: [id, sellerId], onDelete: Cascade, map: "variantes_produto_produto_id_vendedor_id_fkey")
+  inventory Inventory?
+
+  @@unique([sellerId, sku])
+  @@index([productId])
+  @@index([sellerId])
+  @@map("variantes_produto")
+  @@schema("catalog")
+}
+
+/// At most one Inventory per variant (variantId unique).
+/// A sellable variant MUST have Inventory; created together with Product+Variant
+/// in one transaction (see ProductsService.createInTransaction).
+/// PostgreSQL CHECKs (physical names): quantidade >= 0, quantidade_reservada >= 0,
+/// quantidade_reservada <= quantidade. availableQuantity = quantity - reservedQuantity.
+/// Reserve / release / commit must be single atomic UPDATEs (see InventoryService) —
+/// ported unchanged, but not wired to any HTTP endpoint in this v1: there is no
+/// checkout yet to call it (orders-service does not exist). See README.md.
+model Inventory {
+  id               String   @id @default(uuid()) @db.Uuid
+  variantId        String   @unique @map("variante_id") @db.Uuid
+  quantity         Int      @default(0) @map("quantidade")
+  reservedQuantity Int      @default(0) @map("quantidade_reservada")
+  updatedAt        DateTime @updatedAt @map("atualizado_em")
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("estoques")
+  @@schema("catalog")
+}
+
+// ---------------------------------------------------------------------------
+// Conteúdos / Cursos -- pedido de Arthur (28/09), v1 mínimo: só cadastro e
+// moderação pelo admin (rascunho -> revisão -> publicado/rejeitado/
+// arquivado). Sem relação com Product/Category/Seller de propósito -- nesta
+// v1 não há vínculo com vendedor (só o admin cadastra, decisão explícita do
+// Arthur) nem com compra/matrícula de aluno (não existe ainda, nem módulos/
+// aulas). category/instructor ficam como texto livre, não uma FK -- mesma
+// simplicidade da v1 do mock que esta tela substitui.
+// ---------------------------------------------------------------------------
+
+enum ContentStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+
+  @@schema("catalog")
+}
+
+enum ContentFormat {
+  VIDEO
+  LIVE
+  TEXT
+
+  @@schema("catalog")
+}
+
+/// Nasce sempre DRAFT (ContentsService.create) -- só muda pra REVIEW via
+/// PATCH /admin/contents/:id/submit-for-review, nunca aceito no create.
+/// Transições são só as que a tela mock já tinha: DRAFT->REVIEW->PUBLISHED
+/// ou DRAFT->REVIEW->REJECTED, PUBLISHED->ARCHIVED. REJECTED e ARCHIVED são
+/// terminais nesta v1 -- sem endpoint pra "reabrir", mesma decisão já
+/// tomada pra Category (sem DELETE, só status).
+model Content {
+  id             String        @id @default(uuid()) @db.Uuid
+  title          String        @map("titulo")
+  instructor     String        @map("instrutor")
+  category       String        @map("categoria")
+  format         ContentFormat @default(VIDEO) @map("formato")
+  /// CHECK: preco_centavos >= 0 (hand-added na migration, mesmo padrão de
+  /// todo outro campo de dinheiro deste projeto -- Prisma não expressa
+  /// CHECK nativamente).
+  priceCents     Int           @default(0) @map("preco_centavos")
+  status         ContentStatus @default(DRAFT)
+  description    String        @default("") @map("descricao")
+  moderationNote String?       @map("nota_moderacao")
+  createdAt      DateTime      @default(now()) @map("criado_em")
+  updatedAt      DateTime      @updatedAt @map("atualizado_em")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("conteudos")
+  @@schema("catalog")
+}

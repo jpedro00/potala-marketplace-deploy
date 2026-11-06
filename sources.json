@@ -1,0 +1,32 @@
+[
+  {
+    "name": "potala-api-gateway",
+    "commit": "fa1883e64c17074e7d058084bc3732e32101e513",
+    "branch": "main",
+    "archiveSha256": "3C5D9889C1537D3F80EFDEB6B66C34CF947B84B8A327644E2BFFDEC112AF0746"
+  },
+  {
+    "name": "potala-identity-service",
+    "commit": "de9e8ebe0245dae70471d72526f9ae7371e57781",
+    "branch": "main",
+    "archiveSha256": "1C57D34F7395A19AC41405A462A840A0BE38BC57EFB7366EE276F1036F30FC53"
+  },
+  {
+    "name": "potala-sellers-service",
+    "commit": "fc37f370a08be4eb09828912e7d2957ae56c6261",
+    "branch": "main",
+    "archiveSha256": "98AFABFB3E06EA04EE0D7620768FE08BF94D76C933966863088A5157198E4CB6"
+  },
+  {
+    "name": "potala-catalog-service",
+    "commit": "3c9a7d6933aab37bfc5dc005e1ceabe71c28cd76",
+    "branch": "main",
+    "archiveSha256": "E4792729A86A3F8AE9EF3C9BB8E5B9B52AD0A8516FE93971BC7D5D5E97B9F8D4"
+  },
+  {
+    "name": "potala-orders-service",
+    "commit": "ca8223211149c812056a1481cc5aeac720eaec6e",
+    "branch": "main",
+    "archiveSha256": "0B08856F9E9137C6DD80664AC609743A2156374FCCC5DAA1E7DEBAE5CDBC2932"
+  }
+]

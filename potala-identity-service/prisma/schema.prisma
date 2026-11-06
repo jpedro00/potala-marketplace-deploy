@@ -1,0 +1,169 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// Este serviço é o único dono do schema Postgres "identity" no banco
+// Supabase compartilhado. Nenhuma outra tabela do marketplace vive aqui, e
+// este schema não referencia tabelas de outros serviços por FK — ver
+// docs/internal-api-contract.md para como outros serviços leem/gravam dados
+// que dependem de identidade (userId), sempre por chamada HTTP, nunca por FK
+// cross-schema.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["identity"]
+}
+
+// ---------------------------------------------------------------------------
+// Identity (autenticação e identidade — não é o perfil comercial)
+// Nomes físicos em português via @map / @@map, como no monólito de origem.
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  PENDING_VERIFICATION
+
+  @@schema("identity")
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  ADMIN
+
+  @@schema("identity")
+}
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique
+  passwordHash    String     @map("hash_senha")
+  status          UserStatus @default(PENDING_VERIFICATION)
+  emailVerifiedAt DateTime?  @map("email_verificado_em")
+  createdAt       DateTime   @default(now()) @map("criado_em")
+  updatedAt       DateTime   @updatedAt @map("atualizado_em")
+
+  roles           UserRole[]
+  sessions        Session[]
+  profile         UserProfile?
+  customerProfile CustomerProfile?
+  adminProfile    AdminProfile?
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("usuarios")
+  @@schema("identity")
+}
+
+/// Dados de pessoa da identidade autenticada (não é a loja, não é o papel de comprador).
+model UserProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("usuario_id") @db.Uuid
+  fullName  String   @map("nome_completo")
+  phone     String?  @map("telefone")
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("perfis_usuario")
+  @@schema("identity")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("usuario_id") @db.Uuid
+  role      Role     @map("papel")
+  createdAt DateTime @default(now()) @map("criado_em")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@index([role])
+  @@map("papeis_usuario")
+  @@schema("identity")
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("usuario_id") @db.Uuid
+  tokenHash  String    @unique @map("hash_token")
+  createdAt  DateTime  @default(now()) @map("criado_em")
+  expiresAt  DateTime  @map("expira_em")
+  lastUsedAt DateTime  @default(now()) @map("ultimo_uso_em")
+  revokedAt  DateTime? @map("revogado_em")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessoes")
+  @@schema("identity")
+}
+
+// ---------------------------------------------------------------------------
+// Customer (papel comprador). Mantido neste serviço na v1 por ser pequeno
+// demais para justificar um customers-service próprio agora — ver análise de
+// arquitetura. Reavaliar quando favoritos/cupons/avaliações do comprador
+// crescerem.
+// ---------------------------------------------------------------------------
+
+model CustomerProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("usuario_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses Address[]
+
+  // Sem relação com Order aqui: Order pertence ao orders-service (schema
+  // separado). orders-service guarda apenas customerId (UUID solto, sem FK)
+  // e resolve o dono via chamada a este serviço quando precisar.
+
+  @@map("perfis_cliente")
+  @@schema("identity")
+}
+
+model Address {
+  id           String   @id @default(uuid()) @db.Uuid
+  customerId   String   @map("cliente_id") @db.Uuid
+  label        String?  @map("rotulo")
+  recipient    String   @map("destinatario")
+  street       String   @map("logradouro")
+  number       String   @map("numero")
+  complement   String?  @map("complemento")
+  neighborhood String   @map("bairro")
+  city         String   @map("cidade")
+  state        String   @map("estado")
+  postalCode   String   @map("cep")
+  isDefault    Boolean  @default(false) @map("padrao")
+  createdAt    DateTime @default(now()) @map("criado_em")
+  updatedAt    DateTime @updatedAt @map("atualizado_em")
+
+  customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("enderecos")
+  @@schema("identity")
+}
+
+// ---------------------------------------------------------------------------
+// Admin (sem cadastro público — só via seed)
+// ---------------------------------------------------------------------------
+
+model AdminProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("usuario_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("perfis_administrador")
+  @@schema("identity")
+}
