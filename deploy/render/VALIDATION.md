@@ -36,7 +36,7 @@ O ensaio usou Node 22.22.0, Windows e PostgreSQL 17 local. O cluster exclusivo e
 
 ## Pendências de validação
 
-1. Docker está ausente no terminal. O Dockerfile foi revisado, mas construir e executar a imagem Linux continua obrigatório. Incluir Prisma/OpenSSL/argon2 e sinais de encerramento.
+1. Em 06/11/2026, o Docker construiu a imagem `potala-marketplace:homolog`. O ensaio executou os cinco processos dentro da imagem com PostgreSQL 17 descartável e passou por login, compra simulada em duas lojas, repetição do checkout, estoque, isolamento entre vendedores e logout. O ensaio iniciou os processos pelo script de teste. Em 09/11/2026, outro ensaio iniciou a imagem pelo comando padrão em modo de produção, obteve HTTP 2xx em /api/v1/health/ready e encerrou o contêiner com docker stop, código 0 e OOMKilled=false.
 2. O lint completo ainda acusa 168 apontamentos de formatação no conjunto, incluindo código herdado. Distribuição observada: gateway 3, identity 27, sellers 17, catalog 37, orders 84. Não declarar lint aprovado. O pacote evita uma reformatação geral nesta migração.
 3. Ainda faltam homologação no Render, memória/CPU/pools sob carga, cookies/CORS no domínio final, frontend no navegador e ensaio operacional de corte/retorno.
 4. Antes da publicação, registrar destinos e releases atuais, backups/restauração de dados, conta, domínio, plano aprovado e banco de homologação.
