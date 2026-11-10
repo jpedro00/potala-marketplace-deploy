@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { UpdatePaymentSettingsDto } from './dto/update-payment-settings.dto';
 import { SellerStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { SellerContext } from '../../common/types/authenticated-user';
@@ -19,6 +20,21 @@ const ONBOARDING_MESSAGES: Record<SellerStatus, string> = {
 export class SellersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getPaymentSettings(context: SellerContext) {
+    if (context.membershipRole !== 'OWNER') throw new ForbiddenException('Only the store owner can access payment settings');
+    const settings = await this.prisma.sellerPaymentSettings.findUnique({where: {sellerId: context.sellerId}});
+    return {acceptPix: settings?.acceptPix ?? false, acceptCard: settings?.acceptCard ?? false, payoutSchedule: settings?.payoutSchedule ?? 'MANUAL', revision: settings?.revision ?? 0, recipientConfigured: Boolean(settings?.recipientRef), bankLabel: settings?.bankLabel ?? null, accountLast4: settings?.accountLast4 ?? null, gatewayStatus: 'UNAVAILABLE', message: 'Preferences only. Charges and payouts require a configured payment provider.'};
+  }
+
+  async updatePaymentSettings(context: SellerContext, dto: UpdatePaymentSettingsDto) {
+    if (context.membershipRole !== 'OWNER') throw new ForbiddenException('Only the store owner can change payment settings');
+    await this.prisma.$transaction(async tx => {
+      await tx.sellerPaymentSettings.upsert({where: {sellerId: context.sellerId}, create: {sellerId: context.sellerId, ...dto}, update: {...dto, revision: {increment: 1}}});
+      await tx.auditLog.create({data: {actorUserId: context.userId, action: 'SELLER_PAYMENT_PREFERENCES_UPDATED', entityType: 'Seller', entityId: context.sellerId, metadata: {...dto}}});
+    });
+    return this.getPaymentSettings(context);
+  }
+
   /**
    * Perfil da própria loja pra tela "Configurações" (ver
    * status-migracao-microservicos.md). Campos exibidos mas NÃO editáveis
@@ -33,6 +49,7 @@ export class SellersService {
 
     return {
       id: seller.id,
+      membershipRole: sellerContext.membershipRole,
       legalName: seller.legalName,
       tradeName: seller.tradeName,
       slug: seller.slug,
@@ -55,6 +72,7 @@ export class SellersService {
    * pra manter rastreável quem mudou o quê mesmo sendo a própria loja.
    */
   async updateSelf(sellerContext: SellerContext, dto: UpdateSellerSettingsDto) {
+    if (sellerContext.membershipRole !== 'OWNER') throw new ForbiddenException('Only the store owner can change store settings');
     await this.prisma.$transaction(async (tx) => {
       const next = await tx.seller.update({
         where: { id: sellerContext.sellerId },

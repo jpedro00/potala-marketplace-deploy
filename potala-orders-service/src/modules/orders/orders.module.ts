@@ -23,6 +23,7 @@ import { ReturnsService } from './returns.service';
 import { ClaimsService } from './claims.service';
 import { DisputesService } from './disputes.service';
 import { PaymentsModule } from '../payments/payments.module';
+import { ActivityPaymentsController } from './activity-payments.controller';
 
 /**
  * ClientsModule (CatalogServiceClient, SellersServiceClient) and
@@ -62,6 +63,7 @@ import { PaymentsModule } from '../payments/payments.module';
 @Module({
   imports: [PaymentsModule],
   controllers: [
+    ActivityPaymentsController,
     CustomerClaimsController,
     OrdersController,
     SellerOrdersController,

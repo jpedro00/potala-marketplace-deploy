@@ -217,3 +217,122 @@ model Content {
   @@map("conteudos")
   @@schema("catalog")
 }
+enum ActivityKind {
+  COURSE
+  EVENT
+  RECURRING
+  @@schema("catalog")
+}
+enum ActivityStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  @@schema("catalog")
+}
+enum EnrollmentStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  @@schema("catalog")
+}
+model Activity {
+  id String @id @default(uuid()) @db.Uuid
+  sellerId String? @db.Uuid
+  title String
+  description String
+  kind ActivityKind
+  status ActivityStatus @default(DRAFT)
+  priceCents Int @default(0)
+  capacity Int
+  timezone String @default("America/Sao_Paulo")
+  enrollmentDeadline DateTime
+  sessions ActivitySession[]
+  enrollments Enrollment[]
+  materials ActivityMaterial[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, kind])
+  @@index([sellerId])
+  @@schema("catalog")
+}
+model ActivitySession {
+  id String @id @default(uuid()) @db.Uuid
+  activityId String @db.Uuid
+  title String
+  startsAt DateTime
+  endsAt DateTime
+  activity Activity @relation(fields:[activityId], references:[id], onDelete:Cascade)
+  @@index([activityId, startsAt])
+  @@schema("catalog")
+}
+model Enrollment {
+  id String @id @default(uuid()) @db.Uuid
+  activityId String @db.Uuid
+  userId String @db.Uuid
+  status EnrollmentStatus
+  priceCents Int
+  expiresAt DateTime?
+  orderId String? @unique @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  activity Activity @relation(fields:[activityId], references:[id])
+  accesses MaterialAccess[]
+  // Uniqueness excluding EXPIRED is enforced by the partial SQL index.
+  @@index([activityId,userId])
+  @@index([userId,status])
+  @@schema("catalog")
+}
+model ActivityMaterial {
+  id String @id @default(uuid()) @db.Uuid
+  activityId String @db.Uuid
+  title String
+  filename String
+  content String @default("")
+  data Bytes?
+  mimeType String @default("text/plain")
+  sizeBytes Int?
+  activity Activity @relation(fields:[activityId], references:[id], onDelete:Cascade)
+  accesses MaterialAccess[]
+  @@index([activityId])
+  @@schema("catalog")
+}
+model MaterialAccess {
+  id String @id @default(uuid()) @db.Uuid
+  enrollmentId String @db.Uuid
+  materialId String @db.Uuid
+  accessedAt DateTime @default(now())
+  enrollment Enrollment @relation(fields:[enrollmentId], references:[id])
+  material ActivityMaterial @relation(fields:[materialId], references:[id])
+  @@index([enrollmentId,accessedAt])
+  @@schema("catalog")
+}
+
+// Eventos consentidos sem identificação pessoal; compra registrada só via API interna.
+model AnalyticsEvent {
+  id String @id @default(uuid()) @db.Uuid
+  sessionId String @map("sessao_anonima") @db.Uuid
+  event String @map("evento") @db.VarChar(40)
+  productId String? @map("produto_id") @db.Uuid
+  activityId String? @map("atividade_id") @db.Uuid
+  orderId String? @unique @map("pedido_id") @db.Uuid
+  quantity Int? @map("quantidade")
+  valueCents Int? @map("valor_centavos")
+  occurredAt DateTime @default(now()) @map("ocorrido_em")
+
+  @@index([occurredAt])
+  @@index([event, occurredAt])
+  @@index([sessionId])
+  @@map("eventos_analytics")
+  @@schema("catalog")
+}
+
+model AnalyticsConsent {
+  sessionId String @id @map("sessao_anonima") @db.Uuid
+  revokedAt DateTime? @map("revogado_em")
+  createdAt DateTime @default(now()) @map("criado_em")
+
+  @@index([createdAt])
+  @@map("consentimentos_analytics")
+  @@schema("catalog")
+}

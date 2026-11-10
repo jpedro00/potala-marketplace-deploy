@@ -28,17 +28,23 @@ import {
 @Injectable()
 export class MockPaymentGatewayAdapter implements PaymentGatewayClient {
   private readonly logger = new Logger(MockPaymentGatewayAdapter.name);
+  private readonly charges = new Map<string, PaymentChargeResult>();
 
   async charge(input: PaymentChargeInput): Promise<PaymentChargeResult> {
+    const key = input.idempotencyKey ?? input.orderId;
+    const existing = this.charges.get(key);
+    if (existing) return existing;
     this.logger.warn(
       `MOCK payment gateway: auto-approving order ${input.orderNumber} (${input.amountCents} cents). This is NOT a real charge -- see this file's own comment and README.md before deploying.`,
     );
 
-    return {
+    const result: PaymentChargeResult = {
       status: 'APPROVED',
       provider: 'mock',
       providerRef: `mock_${randomUUID()}`,
     };
+    this.charges.set(key, result);
+    return result;
   }
 
   /**

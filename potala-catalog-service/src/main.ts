@@ -12,6 +12,8 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // 5MiB material bytes become ~6.7MiB base64; keep a finite envelope limit.
+  app.useBodyParser('json',{limit:'8mb'});
   const config = app.get(ConfigService<AppConfig, true>);
   const logger = new Logger('Bootstrap');
 

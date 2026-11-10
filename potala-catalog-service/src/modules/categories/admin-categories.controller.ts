@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/permissions/require-permission.decorator';
 import {
   Body,
   Controller,
@@ -34,12 +35,14 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 export class AdminCategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
+  @RequirePermission('catalog:category:manage', {mode:'PLATFORM'})
   @Get()
   @ApiOperation({ summary: 'List every category, ACTIVE and INACTIVE' })
   listAll() {
     return this.categoriesService.listAll();
   }
 
+  @RequirePermission('catalog:category:manage', {mode:'PLATFORM'})
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a category (slug auto-derived from name)' })
@@ -47,6 +50,7 @@ export class AdminCategoriesController {
     return this.categoriesService.create(dto);
   }
 
+  @RequirePermission('catalog:category:manage', {mode:'PLATFORM'})
   @Patch(':id')
   @ApiOperation({
     summary:

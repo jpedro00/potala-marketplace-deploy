@@ -71,6 +71,7 @@ model Seller {
   updatedAt     DateTime      @updatedAt @map("atualizado_em")
 
   memberships SellerMembership[]
+  paymentSettings SellerPaymentSettings?
 
   // Sem relação com Product/SellerOrder aqui: pertencem a catalog-service e
   // orders-service (schemas separados, ainda não construídos). Eles guardam
@@ -82,6 +83,23 @@ model Seller {
   @@index([createdAt])
   @@index([reviewedByUserId])
   @@map("vendedores")
+  @@schema("sellers")
+}
+
+/// Provider references only. Never account numbers, Pix keys, PAN, CVV or gateway credentials.
+model SellerPaymentSettings {
+  sellerId String @id @map("vendedor_id") @db.Uuid
+  acceptPix Boolean @default(false) @map("aceita_pix")
+  acceptCard Boolean @default(false) @map("aceita_cartao")
+  payoutSchedule String @default("MANUAL") @map("periodicidade_repasse") @db.VarChar(16)
+  recipientRef String? @map("referencia_recebedor") @db.VarChar(128)
+  provider String? @map("provedor") @db.VarChar(64)
+  bankLabel String? @map("banco") @db.VarChar(80)
+  accountLast4 String? @map("conta_final") @db.Char(4)
+  revision Int @default(1) @map("revisao")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  @@map("preferencias_pagamento")
   @@schema("sellers")
 }
 

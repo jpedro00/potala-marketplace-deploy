@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
@@ -182,5 +183,11 @@ export class InternalService {
       membershipRole: membership.role,
       sellerStatus: membership.seller.status,
     };
+  }
+
+  async getPaymentSettings(sellerId: string) {
+    const seller = await this.prisma.seller.findUnique({where: {id: sellerId}, include: {paymentSettings: true}});
+    if (!seller) throw new NotFoundException('Seller not found');
+    return {sellerId, status: seller.status, acceptPix: seller.paymentSettings?.acceptPix ?? false, acceptCard: seller.paymentSettings?.acceptCard ?? false, recipientRef: seller.paymentSettings?.recipientRef ?? null, provider: seller.paymentSettings?.provider ?? null, revision: seller.paymentSettings?.revision ?? 0};
   }
 }

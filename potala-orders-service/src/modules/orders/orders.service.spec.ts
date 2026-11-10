@@ -180,6 +180,9 @@ describe('OrdersService', () => {
         orderId: 'order-1',
         orderNumber: 'PED-TEST-1',
         amountCents: 2000,
+        idempotencyKey: 'order:order-1:charge',
+        paymentMethod: 'PIX',
+        platformAmountCents: 0,
         splits: [{ sellerId: SELLER_A, amountCents: 2000 }],
       });
       // F2.2A -- cada escrita é condicionada ao status anterior esperado.

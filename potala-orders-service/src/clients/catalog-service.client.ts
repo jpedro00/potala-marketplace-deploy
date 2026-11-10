@@ -13,6 +13,7 @@ export interface InventoryItemInput {
   variantId: string;
   quantity: number;
 }
+export interface ActivityEnrollmentSnapshot { id: string; userId: string; activityId: string; sellerId: string | null; priceCents: number; status: string; expiresAt: string | null; title: string }
 
 /**
  * This service has no local product/variant/price/stock data — that all
@@ -28,6 +29,18 @@ export class CatalogServiceClient {
   private readonly logger = new Logger(CatalogServiceClient.name);
 
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}
+
+  async getEnrollment(id: string): Promise<ActivityEnrollmentSnapshot> {
+    const {baseUrl, apiKey, timeoutMs} = this.configService.get('catalogService', {infer: true});
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/internal/activities/enrollments/${id}`, {headers: {[INTERNAL_API_KEY_HEADER]: apiKey}, signal: AbortSignal.timeout(timeoutMs)});
+      if (!response.ok) throw new Error('Enrollment unavailable');
+      return await response.json();
+    } catch { throw new ServiceUnavailableException('Activity enrollment is unavailable'); }
+  }
+
+  confirmEnrollment(id: string, data: {orderId: string; userId: string; amountCents: number; status: 'CONFIRMED' | 'REVOKED'}) { return this.post(`/api/v1/internal/activities/enrollments/${id}/payment`, data); }
+  recordPurchase(orderId: string, sessionId: string, valueCents: number) { return this.post('/api/v1/internal/analytics/purchases', {orderId, sessionId, valueCents}); }
 
   /**
    * Calls catalog-service's POST /internal/product-variants/resolve. Ids

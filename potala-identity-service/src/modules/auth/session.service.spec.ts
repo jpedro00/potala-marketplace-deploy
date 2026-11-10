@@ -57,7 +57,10 @@ describe('SessionService cookie attributes', () => {
   }
 
   it('uses sameSite=lax when cookieSecure is false (local dev, same-site)', () => {
-    const service = new SessionService(createPrismaMock(), configMockWith(false));
+    const service = new SessionService(
+      createPrismaMock(),
+      configMockWith(false),
+    );
     const response = fakeResponse();
 
     service.attachCookie(response, 'a-token');
@@ -70,7 +73,10 @@ describe('SessionService cookie attributes', () => {
   });
 
   it('uses sameSite=none when cookieSecure is true (cross-site production)', () => {
-    const service = new SessionService(createPrismaMock(), configMockWith(true));
+    const service = new SessionService(
+      createPrismaMock(),
+      configMockWith(true),
+    );
     const response = fakeResponse();
 
     service.attachCookie(response, 'a-token');
@@ -83,7 +89,10 @@ describe('SessionService cookie attributes', () => {
   });
 
   it('clearCookie mirrors the same sameSite/secure pairing', () => {
-    const service = new SessionService(createPrismaMock(), configMockWith(true));
+    const service = new SessionService(
+      createPrismaMock(),
+      configMockWith(true),
+    );
     const response = fakeResponse();
 
     service.clearCookie(response);
@@ -181,6 +190,53 @@ describe('SessionService.validateToken', () => {
       email: 'a@test.com',
       status: UserStatus.ACTIVE,
       roles: ['CUSTOMER'],
+      isSuperAdmin: false,
+      grants: [],
     });
+  });
+  it('returns only current non-revoked unexpired permissions and explicit superadmin flag', async () => {
+    const prisma = createPrismaMock();
+    const service = new SessionService(
+      prisma,
+      createConfigMock() as unknown as ConfigService<AppConfig, true>,
+    );
+    const role = { slot: 1, permissions: ['reports:operational:export'] };
+    const grant = {
+      id: 'grant-1',
+      role,
+      scopeType: 'GLOBAL',
+      sellerIds: [],
+      expiresAt: null,
+      revokedAt: null,
+    };
+    prisma.session.findUnique.mockResolvedValue({
+      id: 's',
+      expiresAt: new Date(Date.now() + 60000),
+      revokedAt: null,
+      lastUsedAt: new Date(),
+      user: {
+        id: 'u',
+        email: 'a@test.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: 'ADMIN' }],
+        adminProfile: { isSuperAdmin: false },
+        accessGrants: [
+          grant,
+          { ...grant, id: 'revoked', revokedAt: new Date() },
+          { ...grant, id: 'expired', expiresAt: new Date(0) },
+        ],
+      },
+    });
+    const result = await service.validateToken('token');
+    expect(result?.isSuperAdmin).toBe(false);
+    expect(result?.grants).toEqual([
+      {
+        grantId: 'grant-1',
+        roleKey: '1',
+        permissions: role.permissions,
+        scope: { type: 'GLOBAL', sellerIds: [] },
+        expiresAt: null,
+      },
+    ]);
   });
 });

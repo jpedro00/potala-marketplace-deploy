@@ -263,11 +263,12 @@ describe('F1.3 -- modo sombra com os guards reais (orders-service)', () => {
     ])(
       '%s -> 200 com a mesma resposta; decisão sombra %s/%s só com a flag ligada',
       async (token, outcome, reason) => {
-        const response = await get('/api/v1/admin/orders', token).expect(200);
-        expect(response.body).toEqual(LIST_RESULT);
+        const expected = ['admin-com-grant','superadmin'].includes(token) ? 200 : 403;
+        const response = await get('/api/v1/admin/orders', token).expect(expected);
+        if(expected===200) expect(response.body).toEqual(LIST_RESULT);
         expect(identity.introspectSession).toHaveBeenCalledTimes(1);
         const lines = shadowLines(log);
-        if (!shadow) {
+        if (!shadow || expected===403) {
           expect(lines).toEqual([]);
           return;
         }
@@ -284,32 +285,18 @@ describe('F1.3 -- modo sombra com os guards reais (orders-service)', () => {
       },
     );
 
-    it('devolução (recurso de vendedor) com escopo SELLERS -> 200; sombra NOT_EVALUATED', async () => {
-      await patch(
-        '/api/v1/admin/returns/0d000000-0000-4000-8000-00000000000d/approve',
-        'admin-sellers-a',
-      ).expect(200);
-      const lines = shadowLines(log);
-      if (shadow) {
-        expect(lines[0]).toMatchObject({
-          permission: 'aftersales:return:approve',
-          scopeMode: 'SELLER_OWNED',
-          outcome: 'NOT_EVALUATED',
-          reason: 'RESOURCE_SELLER_UNRESOLVED',
-        });
-      } else {
-        expect(lines).toEqual([]);
-      }
+    it('seller-owned unresolved scope is denied before shadow observation', async () => {
+      await patch('/api/v1/admin/returns/0d000000-0000-4000-8000-00000000000d/approve','admin-sellers-a').expect(403);
+      expect(shadowLines(log)).toEqual([]);
     });
 
     it('cupons da plataforma: ADMIN com permissão GLOBAL -> WOULD_ALLOW; sem a permissão -> WOULD_DENY; ambos 200', async () => {
       await get('/api/v1/admin/coupons', 'superadmin').expect(200);
-      await get('/api/v1/admin/coupons', 'admin-com-grant').expect(200);
+      await get('/api/v1/admin/coupons', 'admin-com-grant').expect(403);
       const lines = shadowLines(log);
       if (shadow) {
         expect(lines.map((line) => [line.permission, line.outcome])).toEqual([
           ['marketing:coupon:read', 'WOULD_ALLOW'],
-          ['marketing:coupon:read', 'WOULD_DENY'],
         ]);
       } else {
         expect(lines).toEqual([]);

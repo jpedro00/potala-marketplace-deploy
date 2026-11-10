@@ -59,7 +59,7 @@ describe('Authorization foundation', () => {
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 
-  it('allows ADMIN to access administrative resources', () => {
+  it('allows explicitly bootstrapped superadmin to access administrative resources', () => {
     const reflector = {
       getAllAndOverride: jest.fn((key: string) =>
         key === ROLES_KEY ? [Role.ADMIN] : false,
@@ -72,6 +72,8 @@ describe('Authorization foundation', () => {
         email: 'admin@test.com',
         status: UserStatus.ACTIVE,
         roles: [Role.ADMIN],
+        isSuperAdmin:true,
+        grants:[],
       },
     });
 

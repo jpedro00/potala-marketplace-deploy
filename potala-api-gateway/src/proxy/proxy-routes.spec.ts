@@ -8,6 +8,17 @@ const targets = {
 };
 
 describe('buildProxyRoutes', () => {
+  it.each([
+    ['admin/access', 3001], ['admin/reports', 3004], ['admin/finance', 3004], ['me/activity-payments', 3004],
+    ['activities', 3003], ['seller/activities', 3003], ['admin/activities', 3003],
+    ['me/enrollments', 3003], ['public/analytics', 3003], ['admin/analytics', 3003],
+  ])('routes new %s domain to port %s', (path, port) => {
+    const routes = buildProxyRoutes(targets);
+    expect(routes.find(route => route.mountPath === `/api/v1/${path}`)?.targetBaseUrl)
+      .toBe(`http://localhost:${port}/api/v1/${path}`);
+    if (String(path).startsWith('seller/')) expect(routes.findIndex(route => route.mountPath === `/api/v1/${path}`))
+      .toBeLessThan(routes.findIndex(route => route.mountPath === '/api/v1/seller'));
+  });
   it('builds a target that keeps the mount path, per http-proxy-middleware v3 rules', () => {
     const routes = buildProxyRoutes(targets);
     const auth = routes.find((r) => r.mountPath === '/api/v1/auth');

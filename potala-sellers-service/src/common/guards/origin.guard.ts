@@ -1,3 +1,4 @@
+import { hasApiRoutePrefix } from '../http/api-route';
 import {
   CanActivate,
   ExecutionContext,
@@ -25,7 +26,7 @@ export class OriginGuard implements CanActivate {
     // InternalApiKeyGuard, not by a browser Origin header — they never carry
     // one, since nothing about them runs in a browser.
     const path = request.originalUrl ?? request.url ?? '';
-    if (path.includes(INTERNAL_PATH_SEGMENT)) {
+    if (hasApiRoutePrefix(path, INTERNAL_PATH_SEGMENT)) {
       return true;
     }
 

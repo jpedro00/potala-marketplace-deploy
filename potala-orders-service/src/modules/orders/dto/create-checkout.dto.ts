@@ -4,6 +4,8 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsDefined,
+  IsBoolean,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -114,6 +116,9 @@ export class ShippingAddressDto {
 }
 
 export class CreateCheckoutDto {
+  @IsOptional() @IsBoolean() analyticsConsent?: boolean;
+  @IsOptional() @IsUUID('4') analyticsSessionId?: string;
+  @IsOptional() @IsIn(['PIX', 'CARD']) paymentMethod?: 'PIX' | 'CARD';
   @ApiProperty({
     type: [CheckoutItemDto],
     minItems: MIN_CHECKOUT_ITEMS,

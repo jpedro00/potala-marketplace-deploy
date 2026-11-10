@@ -75,7 +75,10 @@ export function createServices(env, root) {
       childEnv.SESSION_COOKIE_SECURE = env.SESSION_COOKIE_SECURE ?? 'true';
       childEnv.SESSION_TTL_DAYS = env.SESSION_TTL_DAYS ?? '7';
     }
-    if (name === 'orders') childEnv.PERMISSION_SHADOW_MODE = env.ORDERS_PERMISSION_SHADOW_MODE ?? 'false';
+    if (name === 'orders') {
+      childEnv.PERMISSION_SHADOW_MODE = env.ORDERS_PERMISSION_SHADOW_MODE ?? 'false';
+      childEnv.PAYMENT_GATEWAY_MODE = env.ORDERS_PAYMENT_GATEWAY_MODE ?? 'unavailable';
+    }
     return { name, command: process.execPath, args: ['dist/main.js'], cwd: join(root, `potala-${name}-service`), env: childEnv };
   });
   const gatewayEnv = { ...common, PORT: port };

@@ -22,6 +22,7 @@ export enum ProductStatus {
  * docs/internal-api-contract.md.
  */
 export interface ResolvedProductVariant {
+  categoryId?: string;
   variantId: string;
   productId: string;
   sellerId: string;

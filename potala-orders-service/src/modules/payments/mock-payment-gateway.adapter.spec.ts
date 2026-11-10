@@ -1,6 +1,11 @@
 import { MockPaymentGatewayAdapter } from './mock-payment-gateway.adapter';
 
 describe('MockPaymentGatewayAdapter', () => {
+  it('replays the same persisted idempotency key without a second simulated charge', async () => {
+    const adapter = new MockPaymentGatewayAdapter();
+    const input = {orderId: 'retry', orderNumber: 'RETRY', amountCents: 100, idempotencyKey: 'stable-key'};
+    expect(await adapter.charge(input)).toEqual(await adapter.charge(input));
+  });
   it('always approves with a provider-shaped result', async () => {
     const adapter = new MockPaymentGatewayAdapter();
 

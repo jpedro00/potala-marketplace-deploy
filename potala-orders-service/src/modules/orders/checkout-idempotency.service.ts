@@ -141,6 +141,7 @@ export class CheckoutIdempotencyService {
         address.postalCode,
       ],
       couponCode: dto.couponCode ? dto.couponCode.trim().toUpperCase() : null,
+      paymentMethod: dto.paymentMethod ?? 'PIX',
     };
     return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
   }

@@ -8,6 +8,9 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { FinanceService } from '../payments/finance.service';
+import { SellersServiceClient } from '../../clients/sellers-service.client';
+import type { ActivityPaymentDto } from './activity-payments.controller';
 import {
   OrderStatus,
   OrderStatusHistoryActorType,
@@ -51,6 +54,7 @@ import {
 } from './order-transitions.service';
 
 type ValidatedItem = {
+  categoryId?: string;
   productId: string;
   variantId: string;
   quantity: number;
@@ -62,6 +66,7 @@ type ValidatedItem = {
 };
 
 type SellerGroup = {
+  financial?: Awaited<ReturnType<FinanceService['quote']>>[number];
   sellerId: string;
   items: ValidatedItem[];
   subtotalCents: number;
@@ -119,6 +124,8 @@ export class OrdersService {
     // F2.2A -- sem estado; o default mantém compatíveis os testes que
     // constroem OrdersService à mão (Nest injeta o provider registrado).
     private readonly transitions: OrderTransitionsService = new OrderTransitionsService(),
+    private readonly finance: FinanceService = new FinanceService(prisma),
+    private readonly sellersServiceClient: SellersServiceClient = undefined!,
   ) {}
 
   async listForCustomer(customerId: string, query: PaginationQueryDto = {}) {
@@ -465,6 +472,7 @@ export class OrdersService {
       dto,
     );
     if (claim.kind === 'replay') {
+      await this.syncPaymentEffects(claim.orderId);
       return {
         order: await this.getForCustomer(customerId, claim.orderId),
         replayed: true,
@@ -525,11 +533,23 @@ export class OrdersService {
       discountCents = resolved.discountCents;
     }
     const totalCents = this.sum([subtotalCents, shippingCents]) - discountCents;
+    if (totalCents <= 0) throw new BadRequestException('A payable order must have a positive total');
+    const financial = await this.finance.quote(sellerGroups, discountCents);
+    sellerGroups.forEach((group, i) => { group.financial = financial[i]; });
+    const paymentMethod = dto.paymentMethod ?? 'PIX';
+    const recipientRefs = new Map<string, string>();
+    if (this.sellersServiceClient) {
+      for (const group of sellerGroups) {
+        const settings = await this.sellersServiceClient.getPaymentSettings(group.sellerId);
+        if (settings.status !== 'ACTIVE' || !(paymentMethod === 'PIX' ? settings.acceptPix : settings.acceptCard)) throw new ConflictException('Payment method is not accepted by a store in this order');
+        if (settings.recipientRef) recipientRefs.set(group.sellerId, settings.recipientRef);
+      }
+    }
 
     const order = await this.createOrderWithRetry(
       customerId,
       dto.shippingAddress,
-      { subtotalCents, shippingCents, discountCents, totalCents },
+      { subtotalCents, shippingCents, discountCents, totalCents, analyticsSessionId: dto.analyticsConsent === true ? dto.analyticsSessionId : undefined },
       sellerGroups,
       couponId,
       idempotency,
@@ -571,18 +591,16 @@ export class OrdersService {
         orderId: order.id,
         status: PaymentTransactionStatus.PENDING,
         amountCents: totalCents,
+        idempotencyKey: `order:${order.id}:charge`,
       },
     });
 
-    // Um split por vendedor do pedido -- best-effort hoje (nenhum gateway
-    // foi escolhido ainda, ver roadmap-mercado-livre.md secao 9), mas ja
-    // fica computado e disponivel pro dia em que o adapter real precisar
-    // dele. sellerGroups.subtotalCents ainda nao inclui comissao/frete por
-    // vendedor (sempre 0 no v1 -- ver README.md), entao splits[].amountCents
-    // == subtotalCents por enquanto.
+    // Seller net splits plus platformAmountCents reconcile exactly to total.
+    // A future real adapter must honor all recipients and their persisted key.
     const splits: PaymentSplitRecipient[] = sellerGroups.map((group) => ({
       sellerId: group.sellerId,
-      amountCents: group.subtotalCents,
+      amountCents: group.financial!.sellerNetCents,
+      ...(recipientRefs.has(group.sellerId) ? {recipientRef: recipientRefs.get(group.sellerId)} : {}),
     }));
 
     let chargeResult: PaymentChargeResult;
@@ -591,6 +609,9 @@ export class OrdersService {
         orderId: order.id,
         orderNumber: order.orderNumber,
         amountCents: totalCents,
+        idempotencyKey: `order:${order.id}:charge`,
+        paymentMethod,
+        platformAmountCents: financial.reduce((sum, q) => sum + q.commissionCents + q.gatewayFeeCents, 0),
         splits,
       });
     } catch (error) {
@@ -627,6 +648,7 @@ export class OrdersService {
         chargeResult,
       );
     } else {
+      await this.prisma.paymentTransaction.update({where: {id: paymentTransaction.id}, data: {provider: chargeResult.provider, providerRef: chargeResult.providerRef}});
       // PENDING -- gateway aceitou a cobranca mas ainda nao confirmou
       // (tipico de Pix/boleto). Nada a fazer aqui: Order ja nasce
       // PENDING_PAYMENT e PaymentTransaction ja nasce PENDING (ver criacao
@@ -638,6 +660,85 @@ export class OrdersService {
     }
 
     return this.getForCustomer(customerId, order.id);
+  }
+
+  async payActivity(customerId: string, dto: ActivityPaymentDto) {
+    const enrollment = await this.catalogServiceClient.getEnrollment(dto.enrollmentId);
+    if (enrollment.userId !== customerId) throw new NotFoundException('Enrollment not found');
+    const existing = await this.prisma.order.findUnique({where: {activityEnrollmentId: enrollment.id}});
+    if (existing) {
+      if (existing.customerId !== customerId) throw new NotFoundException('Enrollment not found');
+      await this.syncPaymentEffects(existing.id);
+      if (existing.status === 'PENDING_PAYMENT' && enrollment.status === 'PENDING_PAYMENT' && enrollment.expiresAt && new Date(enrollment.expiresAt).getTime() > Date.now()) return this.chargeActivityOrder(customerId, existing.id);
+      return this.getForCustomer(customerId, existing.id);
+    }
+    if (enrollment.status !== 'PENDING_PAYMENT' || !enrollment.expiresAt || new Date(enrollment.expiresAt).getTime() <= Date.now()) throw new ConflictException('Enrollment is not awaiting payment or its reservation expired');
+    if (!Number.isSafeInteger(enrollment.priceCents) || enrollment.priceCents <= 0 || enrollment.priceCents > INT4_MAX) throw new ConflictException('Invalid activity price');
+    if (!enrollment.sellerId) throw new ConflictException('Activity payment requires a configured seller recipient');
+    const method = dto.paymentMethod ?? 'PIX';
+    const preferences = await this.sellersServiceClient.getPaymentSettings(enrollment.sellerId);
+    if (preferences.status !== 'ACTIVE' || !(method === 'PIX' ? preferences.acceptPix : preferences.acceptCard)) throw new ConflictException('Payment method is not accepted by this store');
+    const [quote] = await this.finance.quote([{sellerId: enrollment.sellerId, subtotalCents: enrollment.priceCents, items: [{productId: enrollment.activityId, lineTotalCents: enrollment.priceCents}]}], 0);
+    let order;
+    try {
+      order = await this.prisma.$transaction(async tx => {
+        const created = await tx.order.create({data: {customerId, orderNumber: this.generateOrderNumber(), activityEnrollmentId: enrollment.id, subtotalCents: enrollment.priceCents, totalCents: enrollment.priceCents, analyticsSessionId: dto.analyticsConsent === true ? dto.analyticsSessionId : undefined}});
+        const sellerOrder = await tx.sellerOrder.create({data: {orderId: created.id, sellerId: enrollment.sellerId!, subtotalCents: enrollment.priceCents, commissionCents: quote.commissionCents, gatewayFeeCents: quote.gatewayFeeCents, sellerNetCents: quote.sellerNetCents, financialSnapshot: {...quote.financialSnapshot, paymentMethod: method}}});
+        await tx.paymentTransaction.create({data: {orderId: created.id, amountCents: enrollment.priceCents, idempotencyKey: `activity:${enrollment.id}:charge`}});
+        const context: OrderTransitionContext = {source: OrderStatusHistorySource.CHECKOUT, actorType: OrderStatusHistoryActorType.CUSTOMER, actorId: customerId};
+        await this.transitions.recordOrderCreated(tx, created.id, OrderStatus.PENDING_PAYMENT, context);
+        await this.transitions.recordSellerOrderCreated(tx, {orderId: created.id, sellerOrderId: sellerOrder.id, sellerId: enrollment.sellerId!}, SellerOrderStatus.PENDING, context);
+        return created;
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const winner = await this.prisma.order.findUnique({where: {activityEnrollmentId: enrollment.id}});
+        if (winner?.customerId === customerId) return this.getForCustomer(customerId, winner.id);
+      }
+      throw e;
+    }
+    return this.chargeActivityOrder(customerId, order.id);
+  }
+
+  private async chargeActivityOrder(customerId: string, orderId: string) {
+    const order = await this.prisma.order.findUniqueOrThrow({where: {id: orderId}, include: {paymentTransactions: true, sellerOrders: true}});
+    if (order.customerId !== customerId) throw new NotFoundException('Enrollment not found');
+    const payment = order.paymentTransactions.find(p => p.status === 'PENDING');
+    if (order.status !== 'PENDING_PAYMENT' || !payment || payment.providerRef) return this.getForCustomer(customerId, order.id);
+    const sellerOrder = order.sellerOrders[0];
+    if (!sellerOrder) throw new ConflictException('Activity financial snapshot is missing');
+    const snapshot = sellerOrder.financialSnapshot as Prisma.JsonObject | null;
+    const method = snapshot?.paymentMethod === 'CARD' ? 'CARD' : 'PIX';
+    const preferences = await this.sellersServiceClient.getPaymentSettings(sellerOrder.sellerId);
+    // Provider adapters MUST deduplicate this persisted key, including across process restarts.
+    let result: PaymentChargeResult;
+    try {
+      result = await this.paymentGateway.charge({orderId: order.id, orderNumber: order.orderNumber, amountCents: payment.amountCents, paymentMethod: method, idempotencyKey: payment.idempotencyKey!, splits: [{sellerId: sellerOrder.sellerId, amountCents: sellerOrder.sellerNetCents, ...(preferences.recipientRef ? {recipientRef: preferences.recipientRef} : {})}], platformAmountCents: sellerOrder.commissionCents + sellerOrder.gatewayFeeCents});
+    } catch {
+      await this.finalizeFailedPayment(order.id, payment.id, [], OrderStatusHistorySource.PAYMENT_CHECKOUT, ORDER_TRANSITION_REASON.PAYMENT_GATEWAY_UNAVAILABLE);
+      throw new ServiceUnavailableException('Payment provider is unavailable. No confirmed payment or payout.');
+    }
+    if (result.status === 'APPROVED') await this.finalizeApprovedPayment(order.id, payment.id, result, [], OrderStatusHistorySource.PAYMENT_CHECKOUT);
+    else if (result.status === 'FAILED') await this.finalizeFailedPayment(order.id, payment.id, [], OrderStatusHistorySource.PAYMENT_CHECKOUT, ORDER_TRANSITION_REASON.PAYMENT_DECLINED, result);
+    else await this.prisma.paymentTransaction.update({where: {id: payment.id}, data: {provider: result.provider, providerRef: result.providerRef}});
+    return this.getForCustomer(customerId, order.id);
+  }
+
+  /** Server callbacks are idempotent. Propagate failures so a provider replay retries them. */
+  private async syncPaymentEffects(orderId: string) {
+    const order = await this.prisma.order.findUnique({where: {id: orderId}});
+    if (!order || !['PAID', 'FULFILLING', 'COMPLETED'].includes(order.status)) return;
+    if (order.activityEnrollmentId) {
+      try { await this.catalogServiceClient.confirmEnrollment(order.activityEnrollmentId, {orderId, userId: order.customerId, amountCents: order.totalCents, status: 'CONFIRMED'}); }
+      catch (error) {
+        await this.prisma.outboxEvent.upsert({where: {id: order.id}, create: {id: order.id, eventType: 'PAYMENT_RECONCILIATION_REQUIRED', eventVersion: 1, aggregateType: 'ORDER', aggregateId: order.id, orderId: order.id, payload: {reason: 'ENROLLMENT_CONFIRMATION_FAILED', enrollmentId: order.activityEnrollmentId}}, update: {}});
+        throw error;
+      }
+    }
+    if (order.analyticsSessionId) {
+      try { await this.catalogServiceClient.recordPurchase(orderId, order.analyticsSessionId, order.totalCents); }
+      catch { this.logger.warn(`Purchase analytics delivery failed for order ${orderId}`); }
+    }
   }
 
   /**
@@ -668,6 +769,7 @@ export class OrdersService {
     }
 
     if (paymentTransaction.status !== PaymentTransactionStatus.PENDING) {
+      if (paymentTransaction.status === PaymentTransactionStatus.APPROVED) await this.syncPaymentEffects(paymentTransaction.orderId);
       this.logger.log(
         `Webhook for transaction ${paymentTransaction.id} ignored -- already ${paymentTransaction.status} (duplicate delivery).`,
       );
@@ -759,6 +861,7 @@ export class OrdersService {
 
       return {
         productId: item.productId,
+        categoryId: variant.categoryId,
         variantId: item.variantId,
         quantity: item.quantity,
         sellerId: variant.sellerId,
@@ -796,6 +899,7 @@ export class OrdersService {
       shippingCents: number;
       discountCents: number;
       totalCents: number;
+      analyticsSessionId?: string;
     },
     sellerGroups: SellerGroup[],
     couponId: string | null,
@@ -843,6 +947,7 @@ export class OrdersService {
       shippingCents: number;
       discountCents: number;
       totalCents: number;
+      analyticsSessionId?: string;
     },
     sellerGroups: SellerGroup[],
     couponId: string | null,
@@ -865,6 +970,7 @@ export class OrdersService {
         shippingCents: totals.shippingCents,
         discountCents: totals.discountCents,
         totalCents: totals.totalCents,
+        analyticsSessionId: totals.analyticsSessionId,
         shippingAddress: {
           create: {
             recipient: shippingAddress.recipient,
@@ -903,8 +1009,11 @@ export class OrdersService {
           subtotalCents: group.subtotalCents,
           // v1 computes neither per-seller shipping nor commission. See README.md.
           shippingCents: 0,
-          commissionCents: 0,
-          sellerNetCents: 0,
+          commissionCents: group.financial!.commissionCents,
+          sellerNetCents: group.financial!.sellerNetCents,
+          gatewayFeeCents: group.financial!.gatewayFeeCents,
+          discountCents: group.financial!.discountCents,
+          financialSnapshot: group.financial!.financialSnapshot,
         },
       });
       await this.transitions.recordSellerOrderCreated(
@@ -1057,6 +1166,7 @@ export class OrdersService {
     );
 
     if (outcome === 'ALREADY_FINALIZED') {
+      await this.syncPaymentEffects(orderId);
       this.logger.log(
         `Approval for payment transaction ${paymentTransactionId} ignored -- already finalized (duplicate delivery).`,
       );
@@ -1075,7 +1185,7 @@ export class OrdersService {
     }
 
     try {
-      await this.catalogServiceClient.commitInventory(inventoryItems);
+      if (inventoryItems.length) await this.catalogServiceClient.commitInventory(inventoryItems);
     } catch (error) {
       // Known gap, documented in README.md: payment already succeeded and
       // the order is already PAID in this service's own database. A
@@ -1086,6 +1196,7 @@ export class OrdersService {
         `commitInventory failed for order ${orderId} after an approved payment: ${(error as Error).message}`,
       );
     }
+    await this.syncPaymentEffects(orderId);
     return outcome;
   }
 
@@ -1169,7 +1280,7 @@ export class OrdersService {
     }
 
     try {
-      await this.catalogServiceClient.releaseInventory(inventoryItems);
+      if (inventoryItems.length) await this.catalogServiceClient.releaseInventory(inventoryItems);
     } catch (error) {
       // Same known gap as finalizeApprovedPayment's commitInventory, mirrored
       // for the release path: stock could stay reserved-but-not-released.

@@ -181,6 +181,9 @@ model Order {
   createdAt     DateTime    @default(now()) @map("criado_em")
   updatedAt     DateTime    @updatedAt @map("atualizado_em")
 
+  activityEnrollmentId String? @unique @map("inscricao_atividade_id") @db.Uuid
+  analyticsSessionId String? @map("sessao_analytics_id") @db.Uuid
+
   shippingAddress        OrderShippingAddress?
   sellerOrders           SellerOrder[]
   paymentTransactions    PaymentTransaction[]
@@ -234,6 +237,9 @@ model SellerOrder {
   shippingCents   Int               @default(0) @map("frete_centavos")
   commissionCents Int               @default(0) @map("comissao_centavos")
   sellerNetCents  Int               @default(0) @map("liquido_vendedor_centavos")
+  discountCents   Int               @default(0) @map("desconto_centavos")
+  gatewayFeeCents Int               @default(0) @map("taxa_gateway_centavos")
+  financialSnapshot Json?          @map("snapshot_financeiro")
   createdAt       DateTime          @default(now()) @map("criado_em")
   updatedAt       DateTime          @updatedAt @map("atualizado_em")
 
@@ -302,6 +308,8 @@ model PaymentTransaction {
   amountCents Int                      @map("valor_centavos")
   provider    String?                  @map("provedor")
   providerRef String?                  @map("referencia_provedor")
+  idempotencyKey String?               @unique @map("chave_idempotencia") @db.VarChar(128)
+  refundRequests RefundRequest[]
   createdAt   DateTime                 @default(now()) @map("criado_em")
   updatedAt   DateTime                 @updatedAt @map("atualizado_em")
 
@@ -311,6 +319,37 @@ model PaymentTransaction {
   @@index([orderId])
   @@index([status])
   @@map("transacoes_pagamento")
+  @@schema("orders")
+}
+
+/// Immutable commercial policy versions, explicitly approved by a platform administrator.
+model FinancialPolicy {
+  id String @id @default(uuid()) @db.Uuid
+  scope String @db.VarChar(16)
+  scopeId String? @map("escopo_id") @db.Uuid
+  scopeKey String @map("chave_escopo") @db.VarChar(80)
+  version Int @map("versao")
+  commissionBps Int @map("comissao_bps")
+  gatewayFeeBps Int @map("taxa_gateway_bps")
+  fixedFeeCents Int @map("taxa_fixa_centavos")
+  createdByUserId String @map("criado_por_usuario_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("criado_em")
+  @@unique([scopeKey, version])
+  @@map("politicas_financeiras")
+  @@schema("orders")
+}
+
+/// Preparation only: no refund is executed without a real provider adapter.
+model RefundRequest {
+  id String @id @default(uuid()) @db.Uuid
+  paymentTransactionId String @map("transacao_id") @db.Uuid
+  idempotencyKey String @unique @map("chave_idempotencia") @db.VarChar(128)
+  amountCents Int @map("valor_centavos")
+  status String @default("PREPARED") @db.VarChar(24)
+  createdByUserId String @map("criado_por_usuario_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("criado_em")
+  paymentTransaction PaymentTransaction @relation(fields: [paymentTransactionId], references: [id], onDelete: Restrict)
+  @@map("solicitacoes_estorno")
   @@schema("orders")
 }
 

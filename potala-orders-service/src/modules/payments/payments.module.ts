@@ -1,17 +1,29 @@
 import { Module } from '@nestjs/common';
 import { MockPaymentGatewayAdapter } from './mock-payment-gateway.adapter';
 import { PAYMENT_GATEWAY_CLIENT } from './payment-gateway.interface';
+import { ServiceUnavailableException } from '@nestjs/common';
+import { FinanceService } from './finance.service';
+import { FinanceController } from './finance.controller';
+
+export function createPaymentGateway(environment = process.env.NODE_ENV, mode = process.env.PAYMENT_GATEWAY_MODE) {
+  if (environment === 'test' && mode === 'mock') return new MockPaymentGatewayAdapter();
+  return {
+    async charge(): Promise<never> { throw new ServiceUnavailableException('Payment provider has not been configured. No charge or payout was performed.'); },
+    async parseWebhook(): Promise<never> { throw new ServiceUnavailableException('Payment provider has not been configured.'); },
+  };
+}
 
 /**
- * The only place a real gateway integration is wired in later: replace
- * `useClass: MockPaymentGatewayAdapter` with a real adapter implementing
- * PaymentGatewayClient. Nothing outside this module needs to change —
- * OrdersService only ever depends on the PAYMENT_GATEWAY_CLIENT token.
+ * Production fails closed until a real adapter is selected and implemented.
+ * Simulation requires NODE_ENV=test AND PAYMENT_GATEWAY_MODE=mock.
+ * Real adapters must honor persisted idempotency keys and authenticated webhooks.
  */
 @Module({
+  controllers: [FinanceController],
   providers: [
-    { provide: PAYMENT_GATEWAY_CLIENT, useClass: MockPaymentGatewayAdapter },
+    FinanceService,
+    { provide: PAYMENT_GATEWAY_CLIENT, useFactory: () => createPaymentGateway() },
   ],
-  exports: [PAYMENT_GATEWAY_CLIENT],
+  exports: [PAYMENT_GATEWAY_CLIENT, FinanceService],
 })
 export class PaymentsModule {}

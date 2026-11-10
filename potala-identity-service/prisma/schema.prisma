@@ -51,6 +51,7 @@ model User {
   profile         UserProfile?
   customerProfile CustomerProfile?
   adminProfile    AdminProfile?
+  accessGrants    AdminAccessGrant[]
 
   @@index([status])
   @@index([createdAt])
@@ -157,6 +158,7 @@ model Address {
 // ---------------------------------------------------------------------------
 
 model AdminProfile {
+  isSuperAdmin Boolean @default(false) @map("super_admin")
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @unique @map("usuario_id") @db.Uuid
   createdAt DateTime @default(now()) @map("criado_em")
@@ -165,5 +167,39 @@ model AdminProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("perfis_administrador")
+  @@schema("identity")
+}
+
+model AdminAccessRole {
+  id String @id @default(uuid()) @db.Uuid
+  slot Int @unique
+  name String
+  permissions String[]
+  grants AdminAccessGrant[]
+  updatedAt DateTime @updatedAt
+  @@schema("identity")
+}
+model AdminAccessGrant {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  roleId String @db.Uuid
+  scopeType String
+  sellerIds String[] @db.Uuid
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role AdminAccessRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  @@index([userId])
+  @@schema("identity")
+}
+
+model AdminAccessAudit {
+  id String @id @default(uuid()) @db.Uuid
+  actorUserId String? @db.Uuid
+  action String
+  targetId String @db.Uuid
+  createdAt DateTime @default(now())
+  @@index([createdAt])
   @@schema("identity")
 }

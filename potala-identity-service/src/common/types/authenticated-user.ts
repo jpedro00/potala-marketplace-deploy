@@ -6,6 +6,8 @@ export interface AuthenticatedUser {
   email: string;
   status: UserStatus;
   roles: Role[];
+  isSuperAdmin?: boolean;
+  grants?: unknown;
 }
 
 export interface RequestWithAuth extends Request {

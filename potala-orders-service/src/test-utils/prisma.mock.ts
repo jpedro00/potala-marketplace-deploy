@@ -3,7 +3,9 @@ import { PrismaService } from '../database/prisma.service';
 type MockFn = jest.Mock;
 
 export type PrismaMock = {
+  financialPolicy: {findMany: MockFn};
   order: {
+    findUnique: MockFn;
     findFirst: MockFn;
     findMany: MockFn;
     create: MockFn;
@@ -70,6 +72,7 @@ export type PrismaMock = {
   };
   /** F2.2B-A -- outbox (OrderTransitionsService; só INSERT). */
   outboxEvent: {
+    upsert: MockFn;
     create: MockFn;
   };
   /** F2.1 -- idempotência do checkout (CheckoutIdempotencyService). */
@@ -99,7 +102,9 @@ export type PrismaMock = {
  */
 export function createPrismaMock(): PrismaMock & PrismaService {
   const prisma: PrismaMock = {
+    financialPolicy: {findMany: jest.fn().mockResolvedValue([{id: 'explicit-test-zero-policy', scope: 'PLATFORM', scopeId: null, version: 1, commissionBps: 0, gatewayFeeBps: 0, fixedFeeCents: 0}])},
     order: {
+      findUnique: jest.fn().mockResolvedValue(null),
       findFirst: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
@@ -179,6 +184,7 @@ export function createPrismaMock(): PrismaMock & PrismaService {
       create: jest.fn().mockResolvedValue({}),
     },
     outboxEvent: {
+      upsert: jest.fn(),
       create: jest.fn().mockResolvedValue({}),
     },
     // Default: a chave é nova (INSERT vence) e toda escrita condicional
@@ -242,6 +248,9 @@ export function createConfigMock() {
 /** Fake CatalogServiceClient — every method is a jest.fn() the test configures per-case. */
 export function createCatalogServiceClientMock() {
   return {
+    confirmEnrollment: jest.fn(),
+    recordPurchase: jest.fn(),
+    getEnrollment: jest.fn(),
     resolveVariants: jest.fn(),
     reserveInventory: jest.fn(),
     releaseInventory: jest.fn(),

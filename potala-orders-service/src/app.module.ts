@@ -1,3 +1,4 @@
+import { ReportsModule } from './modules/reports/reports.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -47,6 +48,7 @@ import { HealthModule } from './modules/health/health.module';
     PrismaModule,
     ClientsModule,
     OrdersModule,
+    ReportsModule,
     HealthModule,
   ],
   providers: [

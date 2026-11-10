@@ -7,6 +7,7 @@ import { Role } from '../../common/types/identity-enums';
 import { SellerContext } from '../../common/types/authenticated-user';
 import { SellersService } from './sellers.service';
 import { UpdateSellerSettingsDto } from './dto/update-seller-settings.dto';
+import { UpdatePaymentSettingsDto } from './dto/update-payment-settings.dto';
 
 /**
  * Tela "Configurações" do vendedor. Usa só SellerContextGuard (sem
@@ -19,6 +20,12 @@ import { UpdateSellerSettingsDto } from './dto/update-seller-settings.dto';
 @UseGuards(SellerContextGuard)
 export class SellerSettingsController {
   constructor(private readonly sellersService: SellersService) {}
+
+  @Get('payments')
+  getPayments(@CurrentSeller() seller: SellerContext) { return this.sellersService.getPaymentSettings(seller); }
+
+  @Patch('payments')
+  updatePayments(@CurrentSeller() seller: SellerContext, @Body() dto: UpdatePaymentSettingsDto) { return this.sellersService.updatePaymentSettings(seller, dto); }
 
   @Get()
   @ApiOperation({ summary: 'Current store profile for the authenticated seller owner/member.' })

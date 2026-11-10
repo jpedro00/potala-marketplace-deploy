@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
+import { RequirePermission } from '../../common/permissions/require-permission.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { AdminService } from './admin.service';
@@ -20,11 +21,13 @@ import { CreateAdminDto } from './dto/create-admin.dto';
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @RequirePermission('customers:customer:read', {mode:'PLATFORM'})
   @Get('customers')
   listCustomers(@Query() query: PaginationQueryDto) {
     return this.adminService.listCustomers(query);
   }
 
+  @RequirePermission('customers:customer:suspend', {mode:'PLATFORM'})
   @Patch('customers/:id/block')
   blockCustomer(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -33,6 +36,7 @@ export class AdminController {
     return this.adminService.setCustomerStatus(id, 'BLOCKED', body.reason);
   }
 
+  @RequirePermission('customers:customer:suspend', {mode:'PLATFORM'})
   @Patch('customers/:id/unblock')
   unblockCustomer(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -41,6 +45,7 @@ export class AdminController {
     return this.adminService.setCustomerStatus(id, 'ACTIVE', body.reason);
   }
 
+  @RequirePermission('identity:admin:read', {mode:'PLATFORM'})
   @Get('admins')
   listAdmins(@Query() query: PaginationQueryDto) {
     return this.adminService.listAdmins(query);

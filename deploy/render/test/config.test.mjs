@@ -28,7 +28,14 @@ test('maps ports, credentials and local endpoints without leaking unrelated secr
   assert.equal(byName.gateway.env.DATABASE_URL, undefined);
   assert.equal(byName.identity.env.CATALOG_SERVICE_API_KEY, undefined);
   assert.equal(byName.orders.env.ADMIN_PASSWORD, undefined);
+  assert.equal(byName.orders.env.PAYMENT_GATEWAY_MODE, 'unavailable');
   for (const service of services) assert.equal(service.env.NODE_OPTIONS, undefined);
+});
+
+test('maps explicit test payment mode only to Orders; adapter still requires NODE_ENV=test', () => {
+  const services = createServices({...environment(), NODE_ENV: 'test', ORDERS_PAYMENT_GATEWAY_MODE: 'mock'}, process.cwd());
+  assert.equal(services.find(service => service.name === 'orders').env.PAYMENT_GATEWAY_MODE, 'mock');
+  assert.equal(services.find(service => service.name === 'identity').env.PAYMENT_GATEWAY_MODE, undefined);
 });
 
 test('rejects missing secrets and public port collisions before starting any child', () => {

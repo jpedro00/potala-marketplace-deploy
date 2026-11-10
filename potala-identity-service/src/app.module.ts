@@ -1,3 +1,4 @@
+import { hasApiRoutePrefix } from './common/http/api-route';
 import { ExecutionContext, Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -26,11 +27,11 @@ function requestPath(context: ExecutionContext): string {
 }
 
 function isAuthHttpPath(context: ExecutionContext): boolean {
-  return requestPath(context).includes(AUTH_PATH_SEGMENT);
+  return hasApiRoutePrefix(requestPath(context), AUTH_PATH_SEGMENT);
 }
 
 function isInternalHttpPath(context: ExecutionContext): boolean {
-  return requestPath(context).includes(INTERNAL_PATH_SEGMENT);
+  return hasApiRoutePrefix(requestPath(context), INTERNAL_PATH_SEGMENT);
 }
 
 @Module({

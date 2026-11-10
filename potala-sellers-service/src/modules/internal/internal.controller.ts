@@ -29,6 +29,9 @@ import { CreateSellerDto } from './dto/create-seller.dto';
 export class InternalController {
   constructor(private readonly internalService: InternalService) {}
 
+  @Get('sellers/:sellerId/payment-settings')
+  paymentSettings(@Param('sellerId', new ParseUUIDPipe({version: '4'})) sellerId: string) { return this.internalService.getPaymentSettings(sellerId); }
+
   @Post('sellers')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

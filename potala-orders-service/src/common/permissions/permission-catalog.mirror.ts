@@ -12,7 +12,7 @@
  * Gestão de acessos (papéis, concessões, superadmin) não está no catálogo
  * por decisão da F1.2: é exclusiva de `isSuperAdmin`.
  */
-export const PERMISSION_CATALOG_MIRROR_VERSION = '2026-10-14.1';
+export const PERMISSION_CATALOG_MIRROR_VERSION = '2026-11-10.1';
 
 export const PERMISSION_CODES = [
   'dashboard:overview:read',
@@ -63,6 +63,12 @@ export const PERMISSION_CODES = [
   'reports:financial:export',
   'identity:admin:read',
   'identity:audit:read',
+  'catalog:content:read',
+  'catalog:content:manage',
+  'catalog:activity:read',
+  'catalog:activity:manage',
+  'catalog:enrollment:read',
+  'catalog:enrollment:manage',
   'system:health:read',
   'system:integration:read',
 ] as const;

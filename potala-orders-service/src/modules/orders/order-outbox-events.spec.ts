@@ -151,7 +151,7 @@ describe('F2.2B-A -- nenhum publicador existe nesta entrega', () => {
     });
   }
 
-  it('o código de produção só INSERE na outbox: nenhuma leitura, atualização, exclusão, timer ou agendamento', () => {
+  it('outbox permite INSERT e upsert idempotente de reconciliação, sem publicador ou agendamento', () => {
     const offenders: string[] = [];
     for (const file of productionFiles(SRC)) {
       if (file.includes(`${join('src', 'test-utils')}`)) {
@@ -159,7 +159,7 @@ describe('F2.2B-A -- nenhum publicador existe nesta entrega', () => {
       }
       const source = readFileSync(file, 'utf8');
       const patterns = [
-        /outboxEvent\.(?!create\b)[a-zA-Z]+/,
+        /outboxEvent\.(?!(?:create|upsert)\b)[a-zA-Z]+/,
         // SQL cru sobre a tabela (claim/atualização de um publicador)
         /"eventos_outbox"/,
         /setInterval\(/,

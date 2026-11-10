@@ -20,6 +20,17 @@ export class SellersServiceClient {
 
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}
 
+  async getPaymentSettings(sellerId: string): Promise<{sellerId: string; status: string; acceptPix: boolean; acceptCard: boolean; recipientRef: string | null; provider: string | null; revision: number}> {
+    const {baseUrl, apiKey, timeoutMs} = this.configService.get('sellersService', {infer: true});
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/internal/sellers/${sellerId}/payment-settings`, {headers: {[INTERNAL_API_KEY_HEADER]: apiKey}, signal: AbortSignal.timeout(timeoutMs)});
+      if (!response.ok) throw new Error('Seller payment settings unavailable');
+      return await response.json();
+    } catch {
+      throw new ServiceUnavailableException('Seller payment settings are unavailable');
+    }
+  }
+
   /**
    * Calls sellers-service's GET /internal/sellers/membership/:userId.
    * Returns null when the user has no store membership (caller should

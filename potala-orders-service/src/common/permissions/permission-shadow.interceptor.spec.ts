@@ -158,7 +158,7 @@ describe('F1.3 -- PermissionShadowInterceptor', () => {
     expect(lastRecord(log)).toEqual({
       event: 'permission_shadow',
       service: PERMISSION_SHADOW_SERVICE,
-      catalogVersion: '2026-10-14.1',
+      catalogVersion: '2026-11-10.1',
       method: 'PATCH',
       route: '/api/v1/admin/sellers/:id/approve',
       handler: 'FakeController.approve',

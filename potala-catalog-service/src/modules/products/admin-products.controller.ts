@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/permissions/require-permission.decorator';
 import {
   Controller,
   Get,
@@ -41,18 +42,21 @@ import { ProductsService } from './products.service';
 export class AdminProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
+  @RequirePermission('catalog:product:read', {mode:'COLLECTION'})
   @Get()
   @ApiOperation({ summary: 'List every product, any seller, any status' })
   list(@Query() query: PaginationQueryDto) {
     return this.productsService.listForAdmin(query);
   }
 
+  @RequirePermission('catalog:product:update', {mode:'SELLER_OWNED'})
   @Patch(':id/activate')
   @ApiOperation({ summary: 'Activate a product belonging to any store' })
   activate(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.productsService.setStatusForAdmin(id, ProductStatus.ACTIVE);
   }
 
+  @RequirePermission('catalog:product:update', {mode:'SELLER_OWNED'})
   @Patch(':id/deactivate')
   @ApiOperation({ summary: 'Deactivate a product belonging to any store' })
   deactivate(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {

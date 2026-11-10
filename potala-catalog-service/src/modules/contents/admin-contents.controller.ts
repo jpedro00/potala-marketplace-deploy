@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/permissions/require-permission.decorator';
 import {
   Body,
   Controller,
@@ -32,12 +33,14 @@ import { RejectContentDto } from './dto/reject-content.dto';
 export class AdminContentsController {
   constructor(private readonly contentsService: ContentsService) {}
 
+  @RequirePermission('catalog:content:read', {mode:'PLATFORM'})
   @Get()
   @ApiOperation({ summary: 'Lists every content record, newest first.' })
   list(@Query() query: PaginationQueryDto) {
     return this.contentsService.listForAdmin(query);
   }
 
+  @RequirePermission('catalog:content:manage', {mode:'PLATFORM'})
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Creates a content record (always born DRAFT).' })
@@ -45,6 +48,7 @@ export class AdminContentsController {
     return this.contentsService.create(dto);
   }
 
+  @RequirePermission('catalog:content:manage', {mode:'PLATFORM'})
   @Patch(':id')
   @ApiOperation({ summary: 'Updates the editable fields of a content record.' })
   update(
@@ -54,6 +58,7 @@ export class AdminContentsController {
     return this.contentsService.update(id, dto);
   }
 
+  @RequirePermission('catalog:content:manage', {mode:'PLATFORM'})
   @Patch(':id/submit-for-review')
   @ApiOperation({ summary: 'DRAFT -> REVIEW.' })
   submitForReview(
@@ -62,12 +67,14 @@ export class AdminContentsController {
     return this.contentsService.submitForReview(id);
   }
 
+  @RequirePermission('catalog:content:manage', {mode:'PLATFORM'})
   @Patch(':id/approve')
   @ApiOperation({ summary: 'REVIEW -> PUBLISHED.' })
   approve(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.contentsService.approve(id);
   }
 
+  @RequirePermission('catalog:content:manage', {mode:'PLATFORM'})
   @Patch(':id/reject')
   @ApiOperation({
     summary: 'REVIEW -> REJECTED, with an optional moderation note.',
@@ -79,6 +86,7 @@ export class AdminContentsController {
     return this.contentsService.reject(id, dto);
   }
 
+  @RequirePermission('catalog:content:manage', {mode:'PLATFORM'})
   @Patch(':id/archive')
   @ApiOperation({ summary: 'PUBLISHED -> ARCHIVED.' })
   archive(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {

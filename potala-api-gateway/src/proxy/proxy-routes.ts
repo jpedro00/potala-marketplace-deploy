@@ -55,6 +55,17 @@ export function buildProxyRoutes({
   ordersServiceUrl,
 }: ProxyRouteTargets): ProxyRoute[] {
   return [
+    { mountPath: '/api/v1/admin/access', serviceName: 'identity-service', targetBaseUrl: `${identityServiceUrl}/api/v1/admin/access` },
+    { mountPath: '/api/v1/admin/reports', serviceName: 'orders-service', targetBaseUrl: `${ordersServiceUrl}/api/v1/admin/reports` },
+    { mountPath: '/api/v1/admin/finance', serviceName: 'orders-service', targetBaseUrl: `${ordersServiceUrl}/api/v1/admin/finance` },
+    { mountPath: '/api/v1/me/activity-payments', serviceName: 'orders-service', targetBaseUrl: `${ordersServiceUrl}/api/v1/me/activity-payments` },
+    { mountPath: '/api/v1/activities', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/activities` },
+    { mountPath: '/api/v1/seller/activities', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/seller/activities` },
+    { mountPath: '/api/v1/admin/activities', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/admin/activities` },
+    { mountPath: '/api/v1/me/enrollments', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/me/enrollments` },
+    { mountPath: '/api/v1/public/analytics', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/public/analytics` },
+    { mountPath: '/api/v1/admin/analytics', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/admin/analytics` },
+
     {
       mountPath: '/api/v1/auth',
       serviceName: 'identity-service',

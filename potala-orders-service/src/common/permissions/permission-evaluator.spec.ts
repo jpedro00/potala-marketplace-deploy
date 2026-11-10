@@ -56,20 +56,20 @@ function evaluate(overrides: Partial<EvaluationInput> = {}) {
   });
 }
 
-describe('F1.3 -- avaliador sombra de permissões granulares', () => {
-  describe('espelho do catálogo F1.2', () => {
-    it('versão e formato idênticos ao identity-service (2026-10-14.1, 50 códigos)', () => {
-      expect(PERMISSION_CATALOG_MIRROR_VERSION).toBe('2026-10-14.1');
-      expect(PERMISSION_CODES).toHaveLength(50);
-      expect(new Set(PERMISSION_CODES).size).toBe(50);
+describe('F1.3 -- avaliador sombra de permissÃµes granulares', () => {
+  describe('espelho do catÃ¡logo F1.2', () => {
+    it('versÃ£o e formato idÃªnticos ao identity-service (2026-11-10.1, 56 cÃ³digos)', () => {
+      expect(PERMISSION_CATALOG_MIRROR_VERSION).toBe('2026-11-10.1');
+      expect(PERMISSION_CODES).toHaveLength(56);
+      expect(new Set(PERMISSION_CODES).size).toBe(56);
       for (const code of PERMISSION_CODES) {
         expect(code).toMatch(PERMISSION_CODE_PATTERN);
       }
     });
   });
 
-  describe('introspecção antiga x nova', () => {
-    it('contrato antigo (sem isSuperAdmin nem grants) -> NOT_EVALUATED, nunca autorização', () => {
+  describe('introspecÃ§Ã£o antiga x nova', () => {
+    it('contrato antigo (sem isSuperAdmin nem grants) -> NOT_EVALUATED, nunca autorizaÃ§Ã£o', () => {
       const legacy = {
         id: 'u',
         email: 'a@x',
@@ -83,7 +83,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       });
     });
 
-    it('só F1.1 (isSuperAdmin sem grants): ADMIN comum -> NOT_EVALUATED GRANTS_UNAVAILABLE', () => {
+    it('sÃ³ F1.1 (isSuperAdmin sem grants): ADMIN comum -> NOT_EVALUATED GRANTS_UNAVAILABLE', () => {
       const user = { ...admin(), grants: undefined };
       delete (user as { grants?: unknown }).grants;
       expect(evaluate({ user })).toEqual({
@@ -93,10 +93,10 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
     });
 
     it.each([
-      ['isSuperAdmin não booleano', { isSuperAdmin: 'true' }],
-      ['grants não é lista', { grants: { 0: grant() } }],
+      ['isSuperAdmin nÃ£o booleano', { isSuperAdmin: 'true' }],
+      ['grants nÃ£o Ã© lista', { grants: { 0: grant() } }],
       [
-        'permissão fora do formato',
+        'permissÃ£o fora do formato',
         { grants: [grant({ permissions: ['ADMIN'] })] },
       ],
       [
@@ -115,8 +115,8 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
           ],
         },
       ],
-      ['expiresAt inválido', { grants: [grant({ expiresAt: 'amanhã' })] }],
-      ['grantId inválido', { grants: [grant({ grantId: 'x' })] }],
+      ['expiresAt invÃ¡lido', { grants: [grant({ expiresAt: 'amanhÃ£' })] }],
+      ['grantId invÃ¡lido', { grants: [grant({ grantId: 'x' })] }],
     ])(
       'forma inesperada (%s) -> NOT_EVALUATED INVALID_CLAIMS',
       (_label, override) => {
@@ -127,7 +127,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       },
     );
 
-    it('contrato novo com concessão compatível -> WOULD_ALLOW', () => {
+    it('contrato novo com concessÃ£o compatÃ­vel -> WOULD_ALLOW', () => {
       expect(evaluate()).toMatchObject({
         outcome: 'WOULD_ALLOW',
         reason: 'GRANT_COVERS',
@@ -139,7 +139,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
   });
 
   describe('sujeito', () => {
-    it('sem sessão -> NOT_EVALUATED NO_SESSION', () => {
+    it('sem sessÃ£o -> NOT_EVALUATED NO_SESSION', () => {
       expect(evaluate({ user: undefined })).toEqual({
         outcome: 'NOT_EVALUATED',
         reason: 'NO_SESSION',
@@ -151,7 +151,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       ['SELLER', [Role.SELLER]],
       ['CUSTOMER+SELLER', [Role.CUSTOMER, Role.SELLER]],
     ])(
-      '%s com concessões forjadas na introspecção -> WOULD_DENY NOT_ADMIN (nenhuma permissão administrativa)',
+      '%s com concessÃµes forjadas na introspecÃ§Ã£o -> WOULD_DENY NOT_ADMIN (nenhuma permissÃ£o administrativa)',
       (_label, roles) => {
         expect(
           evaluate({ user: admin({ roles, isSuperAdmin: true }) }),
@@ -159,7 +159,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       },
     );
 
-    it('ADMIN não ativo -> WOULD_DENY ACCOUNT_NOT_ACTIVE', () => {
+    it('ADMIN nÃ£o ativo -> WOULD_DENY ACCOUNT_NOT_ACTIVE', () => {
       expect(evaluate({ user: admin({ status: UserStatus.BLOCKED }) })).toEqual(
         {
           outcome: 'WOULD_DENY',
@@ -168,7 +168,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       );
     });
 
-    it('superadministrador apto -> WOULD_ALLOW SUPERADMIN, mesmo sem concessão', () => {
+    it('superadministrador apto -> WOULD_ALLOW SUPERADMIN, mesmo sem concessÃ£o', () => {
       expect(
         evaluate({ user: admin({ isSuperAdmin: true, grants: [] }) }),
       ).toEqual({
@@ -177,7 +177,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       });
     });
 
-    it('ADMIN comum sem a permissão -> WOULD_DENY PERMISSION_MISSING', () => {
+    it('ADMIN comum sem a permissÃ£o -> WOULD_DENY PERMISSION_MISSING', () => {
       expect(
         evaluate({
           user: admin({
@@ -193,7 +193,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
   });
 
   describe('validade', () => {
-    it('concessão expirada -> WOULD_DENY GRANT_EXPIRED', () => {
+    it('concessÃ£o expirada -> WOULD_DENY GRANT_EXPIRED', () => {
       expect(
         evaluate({
           user: admin({
@@ -203,7 +203,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       ).toEqual({ outcome: 'WOULD_DENY', reason: 'GRANT_EXPIRED' });
     });
 
-    it('concessão com validade futura -> WOULD_ALLOW', () => {
+    it('concessÃ£o com validade futura -> WOULD_ALLOW', () => {
       expect(
         evaluate({
           user: admin({
@@ -213,7 +213,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       ).toBe('WOULD_ALLOW');
     });
 
-    it('concessão revogada: ausente da introspecção -> WOULD_DENY; marcada como revogada -> WOULD_DENY GRANT_REVOKED', () => {
+    it('concessÃ£o revogada: ausente da introspecÃ§Ã£o -> WOULD_DENY; marcada como revogada -> WOULD_DENY GRANT_REVOKED', () => {
       expect(evaluate({ user: admin({ grants: [] }) }).outcome).toBe(
         'WOULD_DENY',
       );
@@ -226,7 +226,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       ).toEqual({ outcome: 'WOULD_DENY', reason: 'GRANT_REVOKED' });
     });
 
-    it('uma concessão expirada não anula outra válida', () => {
+    it('uma concessÃ£o expirada nÃ£o anula outra vÃ¡lida', () => {
       expect(
         evaluate({
           user: admin({
@@ -289,8 +289,8 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       });
     });
 
-    it('não combina permissão de uma concessão com o escopo de outra', () => {
-      // G1: aprovar vendedor, mas só no vendedor A. G2: escopo B, mas outra permissão.
+    it('nÃ£o combina permissÃ£o de uma concessÃ£o com o escopo de outra', () => {
+      // G1: aprovar vendedor, mas sÃ³ no vendedor A. G2: escopo B, mas outra permissÃ£o.
       const user = admin({
         grants: [
           grant({
@@ -313,7 +313,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       });
     });
 
-    it('SELLERS em listagem global -> WOULD_ALLOW só com filtro (requiresFilter)', () => {
+    it('SELLERS em listagem global -> WOULD_ALLOW sÃ³ com filtro (requiresFilter)', () => {
       const user = admin({
         grants: [grant({ scope: { type: 'SELLERS', sellerIds: [SELLER_A] } })],
       });
@@ -324,7 +324,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       });
     });
 
-    it('PLATFORM: só GLOBAL cobre; SELLERS -> WOULD_DENY', () => {
+    it('PLATFORM: sÃ³ GLOBAL cobre; SELLERS -> WOULD_DENY', () => {
       const user = admin({
         grants: [
           grant({
@@ -343,7 +343,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       ).toEqual({ outcome: 'WOULD_DENY', reason: 'SCOPE_NOT_COVERED' });
     });
 
-    it('SELLER_OWNED com escopo por vendedor -> NOT_EVALUATED (dono do recurso não resolvido nesta fase)', () => {
+    it('SELLER_OWNED com escopo por vendedor -> NOT_EVALUATED (dono do recurso nÃ£o resolvido nesta fase)', () => {
       const user = admin({
         grants: [
           grant({
@@ -365,7 +365,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       });
     });
 
-    it('OWN_STORE: sem loja confiável -> NOT_EVALUATED; com loja confiável compara com o alvo', () => {
+    it('OWN_STORE: sem loja confiÃ¡vel -> NOT_EVALUATED; com loja confiÃ¡vel compara com o alvo', () => {
       const user = admin({
         grants: [
           grant({
@@ -398,7 +398,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       ).toEqual({ outcome: 'WOULD_DENY', reason: 'SCOPE_NOT_COVERED' });
     });
 
-    it('OWN_STORE nunca usa sellerId do cliente: só o parâmetro da rota é comparado com a loja confiável', () => {
+    it('OWN_STORE nunca usa sellerId do cliente: sÃ³ o parÃ¢metro da rota Ã© comparado com a loja confiÃ¡vel', () => {
       const user = admin({
         grants: [
           grant({
@@ -407,7 +407,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
           }),
         ],
       });
-      // params traz o alvo; nenhuma outra fonte (body/query) é lida pelo avaliador.
+      // params traz o alvo; nenhuma outra fonte (body/query) Ã© lida pelo avaliador.
       expect(
         evaluate({
           user,
@@ -420,7 +420,7 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
       });
     });
 
-    it('id de rota inválido -> NOT_EVALUATED INVALID_RESOURCE_ID (o ValidationPipe responde 400 depois)', () => {
+    it('id de rota invÃ¡lido -> NOT_EVALUATED INVALID_RESOURCE_ID (o ValidationPipe responde 400 depois)', () => {
       const user = admin({
         grants: [
           grant({
@@ -442,10 +442,10 @@ describe('F1.3 -- avaliador sombra de permissões granulares', () => {
     });
   });
 
-  it('rota sem código no catálogo (pending): ADMIN comum -> NOT_EVALUATED; superadmin -> WOULD_ALLOW', () => {
+  it('rota sem cÃ³digo no catÃ¡logo (pending): ADMIN comum -> NOT_EVALUATED; superadmin -> WOULD_ALLOW', () => {
     const pending = {
       kind: 'pending',
-      reason: 'sem código',
+      reason: 'sem cÃ³digo',
     } as PermissionRequirement;
     expect(evaluate({ requirement: pending })).toEqual({
       outcome: 'NOT_EVALUATED',

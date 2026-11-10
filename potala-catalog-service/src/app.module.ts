@@ -1,3 +1,5 @@
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { hasApiRoutePrefix } from './common/http/api-route';
 import { ExecutionContext, Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -16,6 +18,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { InternalModule } from './modules/internal/internal.module';
 import { ProductsModule } from './modules/products/products.module';
 import { HealthModule } from './modules/health/health.module';
+import { ActivitiesModule } from './modules/activities/activities.module';
 import { ContentsModule } from './modules/contents/contents.module';
 
 function requestPath(context: ExecutionContext): string {
@@ -24,7 +27,7 @@ function requestPath(context: ExecutionContext): string {
 }
 
 function isInternalHttpPath(context: ExecutionContext): boolean {
-  return requestPath(context).includes(INTERNAL_PATH_SEGMENT);
+  return hasApiRoutePrefix(requestPath(context), INTERNAL_PATH_SEGMENT);
 }
 
 /**
@@ -35,6 +38,7 @@ function isInternalHttpPath(context: ExecutionContext): boolean {
  */
 @Module({
   imports: [
+    AnalyticsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
@@ -70,6 +74,7 @@ function isInternalHttpPath(context: ExecutionContext): boolean {
     InternalModule,
     ProductsModule,
     ContentsModule,
+    ActivitiesModule,
     HealthModule,
   ],
   providers: [

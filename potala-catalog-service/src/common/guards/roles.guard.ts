@@ -4,6 +4,10 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { evaluatePermission } from '../permissions/permission-evaluator';
+import { PERMISSION_REQUIREMENT_KEY, PermissionRequirement } from '../permissions/require-permission.decorator';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY, ROLES_KEY } from '../constants/auth.constants';
 import { Role } from '../types/identity-enums';
@@ -38,6 +42,14 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Insufficient permissions');
     }
 
+    if (requiredRoles.includes(Role.ADMIN) && userRoles.includes(Role.ADMIN)) {
+      const requirement = this.reflector.getAllAndOverride<PermissionRequirement>(PERMISSION_REQUIREMENT_KEY, [context.getHandler(), context.getClass()]);
+      const user = request.authUser;
+      const decision = requirement ? evaluatePermission({ user, requirement, params: request.params, trustedOwnSellerId: undefined, now: new Date() }) : null;
+      const permitted = requirement ? decision?.outcome === 'WOULD_ALLOW' && !decision.requiresFilter : user?.isSuperAdmin === true;
+      new Logger('PermissionEnforcement').log(JSON.stringify({event: 'permission_enforced', handler: context.getClass().name + '.' + context.getHandler().name, userRef: user ? createHash('sha256').update(user.id).digest('hex').slice(0,16) : null, accepted: permitted, reason: decision?.reason ?? 'SUPERADMIN_REQUIRED'}));
+      if (!permitted) throw new ForbiddenException('Administrative grant required');
+    }
     return true;
   }
 }

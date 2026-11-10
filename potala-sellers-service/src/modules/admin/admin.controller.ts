@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/permissions/require-permission.decorator';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { SellerStatus } from '@prisma/client';
@@ -21,11 +22,13 @@ import { ReviewSellerDto } from './dto/review-seller.dto';
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @RequirePermission('sellers:seller:read', {mode:'COLLECTION'})
   @Get('sellers')
   listSellers(@Query() query: PaginationQueryDto) {
     return this.adminService.listSellers(query);
   }
 
+  @RequirePermission('sellers:seller:approve', {mode:'SELLER',sellerIdParam:'id'})
   @Patch('sellers/:id/approve')
   approveSeller(
     @CurrentUser() user: AuthenticatedUser,
@@ -40,6 +43,7 @@ export class AdminController {
     );
   }
 
+  @RequirePermission('sellers:seller:approve', {mode:'SELLER',sellerIdParam:'id'})
   @Patch('sellers/:id/reject')
   rejectSeller(
     @CurrentUser() user: AuthenticatedUser,
@@ -54,6 +58,7 @@ export class AdminController {
     );
   }
 
+  @RequirePermission('sellers:seller:suspend', {mode:'SELLER',sellerIdParam:'id'})
   @Patch('sellers/:id/suspend')
   suspendSeller(
     @CurrentUser() user: AuthenticatedUser,

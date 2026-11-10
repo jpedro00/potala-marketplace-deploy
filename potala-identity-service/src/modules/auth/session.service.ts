@@ -101,7 +101,15 @@ export class SessionService {
     const tokenHash = this.hashToken(token);
     const session = await this.prisma.session.findUnique({
       where: { tokenHash },
-      include: { user: { include: { roles: true } } },
+      include: {
+        user: {
+          include: {
+            roles: true,
+            adminProfile: true,
+            accessGrants: { include: { role: true } },
+          },
+        },
+      },
     });
 
     if (!session || session.revokedAt || session.expiresAt <= new Date()) {
@@ -126,6 +134,24 @@ export class SessionService {
       email: session.user.email,
       status: session.user.status,
       roles: session.user.roles.map((item) => item.role),
+      isSuperAdmin:
+        session.user.status === UserStatus.ACTIVE &&
+        session.user.adminProfile?.isSuperAdmin === true,
+      grants:
+        session.user.status === UserStatus.ACTIVE
+          ? (session.user.accessGrants ?? [])
+              .filter(
+                (g) =>
+                  !g.revokedAt && (!g.expiresAt || g.expiresAt > new Date()),
+              )
+              .map((g) => ({
+                grantId: g.id,
+                roleKey: String(g.role.slot),
+                permissions: g.role.permissions,
+                scope: { type: g.scopeType, sellerIds: g.sellerIds },
+                expiresAt: g.expiresAt?.toISOString() ?? null,
+              }))
+          : [],
     };
   }
 

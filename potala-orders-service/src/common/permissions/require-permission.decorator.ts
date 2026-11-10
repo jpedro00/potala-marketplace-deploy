@@ -28,11 +28,9 @@ export type PermissionRequirement =
   | { kind: 'required'; permission: PermissionCode; scope: PermissionScope }
   | { kind: 'pending'; reason: string };
 
-/**
- * F1.3 -- declara a permissão granular (catálogo F1.2) que esta rota exigirá
- * quando a política for ativada (F1.6). Hoje é só metadado lido pelo
- * PermissionShadowInterceptor em modo sombra: NÃO autoriza nem bloqueia
- * nada e NÃO substitui `@Roles(...)`, que continua decidindo o acesso.
+/** Declares the permission and scope enforced by the global RolesGuard.
+ * Collections without a proven server filter reject scoped grants.
+ * Missing/pending metadata is restricted to explicitly bootstrapped superadmins.
  */
 export const RequirePermission = (
   permission: PermissionCode,

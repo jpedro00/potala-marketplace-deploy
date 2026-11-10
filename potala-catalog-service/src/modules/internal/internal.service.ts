@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { InventoryService, StockSnapshot } from '../inventory/inventory.service';
+import {
+  InventoryService,
+  StockSnapshot,
+} from '../inventory/inventory.service';
 import { InventoryItemDto } from './dto/inventory-items.dto';
 
 export interface ResolvedProductVariant {
   variantId: string;
   productId: string;
+  categoryId: string;
   sellerId: string;
   productStatus: string;
   productTitle: string;
@@ -39,12 +43,21 @@ export class InternalService {
    * whether a missing id means "invalid cart line" and should respond to
    * its own client accordingly.
    */
-  async resolveVariants(variantIds: string[]): Promise<ResolvedProductVariant[]> {
+  async resolveVariants(
+    variantIds: string[],
+  ): Promise<ResolvedProductVariant[]> {
     const variants = await this.prisma.productVariant.findMany({
       where: { id: { in: variantIds } },
       include: {
         product: {
-          select: { id: true, sellerId: true, status: true, title: true, priceCents: true },
+          select: {
+            id: true,
+            categoryId: true,
+            sellerId: true,
+            status: true,
+            title: true,
+            priceCents: true,
+          },
         },
         inventory: { select: { quantity: true, reservedQuantity: true } },
       },
@@ -53,6 +66,7 @@ export class InternalService {
     return variants.map((variant) => ({
       variantId: variant.id,
       productId: variant.product.id,
+      categoryId: variant.product.categoryId,
       sellerId: variant.product.sellerId,
       productStatus: variant.product.status,
       productTitle: variant.product.title,
@@ -99,7 +113,11 @@ export class InternalService {
     return this.prisma.$transaction((tx) =>
       Promise.all(
         items.map((item) =>
-          this.inventoryService.commitReservedStock(item.variantId, item.quantity, tx),
+          this.inventoryService.commitReservedStock(
+            item.variantId,
+            item.quantity,
+            tx,
+          ),
         ),
       ),
     );

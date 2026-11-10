@@ -110,7 +110,11 @@ class MemoryDb {
 
   private delegates(undo: Undo[] | null) {
     return {
+      financialPolicy: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'explicit-history-test-policy', scope: 'PLATFORM', scopeId: null, version: 1, commissionBps: 0, gatewayFeeBps: 0, fixedFeeCents: 0 }]),
+      },
       order: {
+        findUnique: jest.fn(async ({ where }: { where: Row }) => this.orders.find(row => row.id === where.id) ?? null),
         create: jest.fn(async ({ data }: { data: Row }) => {
           const { shippingAddress: _address, ...columns } = data;
           return this.insert(
@@ -200,6 +204,12 @@ class MemoryDb {
         ),
       },
       paymentTransaction: {
+        update: jest.fn(async ({ where, data }: { where: Row; data: Row }) => {
+          const row = this.payments.find(item => item.id === where.id);
+          if (!row) throw new Error('Payment fixture not found');
+          this.patch(row, data, undo);
+          return { ...row };
+        }),
         create: jest.fn(async ({ data }: { data: Row }) =>
           this.insert(
             this.payments,
@@ -285,6 +295,9 @@ class MemoryDb {
           null,
         ).id as string,
     );
+    for (const sellerOrderId of sellerOrderIds) {
+      this.orderItems.push({ id: this.nextId('seed-item'), sellerOrderId, variantId: VARIANT_A, quantity: 1 });
+    }
     return { orderId: order.id as string, sellerOrderIds };
   }
 
