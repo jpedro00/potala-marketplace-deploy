@@ -55,6 +55,8 @@ export function buildProxyRoutes({
   ordersServiceUrl,
 }: ProxyRouteTargets): ProxyRoute[] {
   return [
+    { mountPath: '/api/v1/public/contact', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/public/contact` },
+    { mountPath: '/api/v1/admin/contacts', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/admin/contacts` },
     { mountPath: '/api/v1/admin/access', serviceName: 'identity-service', targetBaseUrl: `${identityServiceUrl}/api/v1/admin/access` },
     { mountPath: '/api/v1/admin/reports', serviceName: 'orders-service', targetBaseUrl: `${ordersServiceUrl}/api/v1/admin/reports` },
     { mountPath: '/api/v1/admin/finance', serviceName: 'orders-service', targetBaseUrl: `${ordersServiceUrl}/api/v1/admin/finance` },

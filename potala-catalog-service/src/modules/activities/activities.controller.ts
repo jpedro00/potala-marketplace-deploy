@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -30,6 +31,7 @@ import { RequirePermission } from '../../common/permissions/require-permission.d
 import { ActivitiesService } from './activities.service';
 import {
   ActivitiesQueryDto,
+  ActivityDetailsDto,
   ActivityPaymentDto,
   ActivityStatusDto,
   MaterialDto,
@@ -56,7 +58,7 @@ export class PublicActivitiesController {
 @Controller('me/enrollments')
 export class EnrollmentsController {
   constructor(private readonly service: ActivitiesService) {}
-  @Get() list(
+  @Get() @Header('Cache-Control', 'private, no-store') list(
     @CurrentUser() u: AuthenticatedUser,
     @Query() q: PaginationQueryDto,
   ) {
@@ -97,7 +99,16 @@ export class EnrollmentsController {
 @Controller('seller/activities')
 export class SellerActivitiesController {
   constructor(private readonly service: ActivitiesService) {}
-  @Get() list(
+  @Patch(':id/details')
+  @Header('Cache-Control', 'private, no-store')
+  details(
+    @Param('id', uuid) id: string,
+    @Body() dto: ActivityDetailsDto,
+    @CurrentSeller() s: SellerContext,
+  ) {
+    return this.service.updateDetails(id, dto, s.sellerId);
+  }
+  @Get() @Header('Cache-Control', 'private, no-store') list(
     @CurrentSeller() s: SellerContext,
     @Query() q: PaginationQueryDto,
   ) {
@@ -149,8 +160,15 @@ export class SellerActivitiesController {
 @Controller('admin/activities')
 export class AdminActivitiesController {
   constructor(private readonly service: ActivitiesService) {}
+  @RequirePermission('catalog:activity:manage', { mode: 'PLATFORM' })
+  @Patch(':id/details')
+  @Header('Cache-Control', 'private, no-store')
+  details(@Param('id', uuid) id: string, @Body() dto: ActivityDetailsDto) {
+    return this.service.updateDetails(id, dto);
+  }
   @RequirePermission('catalog:activity:read', { mode: 'PLATFORM' })
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   list(@Query() q: PaginationQueryDto) {
     return this.service.list(undefined, undefined, true, q);
   }

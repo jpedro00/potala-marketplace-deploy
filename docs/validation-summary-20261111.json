@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-11",
+  "environment": "isolated local PostgreSQL + loopback services + Chrome",
+  "productionChanged": false,
+  "services": [
+    {
+      "domain": "identity",
+      "passed": 115,
+      "log": "artifacts/closure-identity-final-tests.log",
+      "sha256": "c28bed9e06509396b0b6e4d4ab4b0e76f2664be8389461925da2208272fab750"
+    },
+    {
+      "domain": "sellers",
+      "passed": 115,
+      "log": "artifacts/closure-sellers-final-tests.log",
+      "sha256": "a82336bbbb05857ec8176bc9af6f1ce91846eaf30d5a8ad053606cf5cdc9bb73"
+    },
+    {
+      "domain": "catalog",
+      "passed": 299,
+      "log": "artifacts/closure-catalog-reviewed-tests.log",
+      "sha256": "496dc0716882ffa24a5491d2a45243ecba9c70a059504c3904bb37c0baeffdc1"
+    },
+    {
+      "domain": "orders",
+      "passed": 632,
+      "log": "artifacts/closure-orders-final-tests.log",
+      "sha256": "83a6796f7bf2f31f7236da8650a663ca62eaea97ae319419cb7572c76527cbe2"
+    },
+    {
+      "domain": "gateway",
+      "passed": 75,
+      "log": "artifacts/closure-gateway-final-tests.log",
+      "sha256": "c41515892374c38a68f93a6ac890bd74cb1ac09f97596a92a6b94b1d86cbb4c4"
+    }
+  ],
+  "totalServiceTestsPassed": 1236,
+  "runtimeTestsPassed": 10,
+  "fullProcessSmoke": {
+    "passed": true,
+    "checkedAt": "2026-11-11T17:39:31.065Z",
+    "target": "http://127.0.0.1:18080/api/v1",
+    "checks": [
+      "five services ready",
+      "auth and logout",
+      "seller isolation",
+      "two seller mock checkout",
+      "split cents and idempotency",
+      "stock once",
+      "CSV and XLSX readback",
+      "all contract report origins",
+      "structured course enrollment and download",
+      "contact idempotency and admin authorization",
+      "server-confirmed contact analytics",
+      "internal routes blocked"
+    ]
+  },
+  "editorBrowserRegressionPassed": true,
+  "dependencyProductionAuditsZeroKnownFindings": [
+    "closure-audit-frontend.json",
+    "closure-audit-potala-api-gateway.json",
+    "closure-audit-potala-catalog-service.json",
+    "closure-audit-potala-identity-service.json",
+    "closure-audit-potala-orders-service.json",
+    "closure-audit-potala-sellers-service.json"
+  ],
+  "restore": {
+    "passed": true,
+    "tables": 53,
+    "nativeForeignKeys": 43,
+    "allTableDigestsMatched": true,
+    "dumpMs": 640.4673999999995,
+    "restoreMs": 1050.9847000000009,
+    "backupSHA256": "687f9a8a5320067c5346b861300b8281643ae675fa628106273761fb87833232"
+  },
+  "limits": [
+    "No production migration or deployment",
+    "No production backup or MFA/secret rotation proof",
+    "1000-user single-IP load did not pass; see ops-validation-20261111.md",
+    "No real payment provider integrated"
+  ]
+}

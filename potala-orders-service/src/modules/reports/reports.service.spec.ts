@@ -14,7 +14,7 @@ const user = {
     {
       grantId: other,
       roleKey: '1',
-      permissions: ['reports:operational:export'],
+      permissions: ['reports:operational:export', 'reports:financial:export'],
       scope: { type: 'SELLERS', sellerIds: [seller] },
       expiresAt: null,
     },

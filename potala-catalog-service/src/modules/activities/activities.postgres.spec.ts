@@ -42,6 +42,134 @@ suite('Activities PostgreSQL concurrency and access (isolated DB)', () => {
     activityIds.push(a.id);
     return a;
   }
+  it('persists instructors and location while protecting the meeting link until confirmation', async () => {
+    const sellerId = randomUUID();
+    const a = await service.create(
+      {
+        title: 'Isolated activity detail proof',
+        description: 'Disposable test fixture',
+        kind: 'COURSE',
+        priceCents: 1000,
+        capacity: 2,
+        timezone: 'America/Sao_Paulo',
+        modality: 'HYBRID',
+        venue: 'Sala de teste',
+        meetingUrl: 'https://meet.example.com/private',
+        instructors: [
+          { name: 'Instrutor de teste', bio: 'Biografia de teste.' },
+        ],
+        enrollmentDeadline: new Date(Date.now() + 3600000).toISOString(),
+        sessions: [
+          {
+            title: 'Encontro',
+            startsAt: new Date(Date.now() + 7200000).toISOString(),
+            endsAt: new Date(Date.now() + 10800000).toISOString(),
+          },
+        ],
+      },
+      sellerId,
+    );
+    activityIds.push(a.id);
+    expect(
+      (await db.activity.findUniqueOrThrow({ where: { id: a.id } }))
+        .instructors,
+    ).toEqual([{ name: 'Instrutor de teste', bio: 'Biografia de teste.' }]);
+    await service.setStatus(a.id, 'PUBLISHED', sellerId);
+    expect(await service.get(a.id)).toMatchObject({
+      modality: 'HYBRID',
+      venue: 'Sala de teste',
+    });
+    expect(await service.get(a.id)).not.toHaveProperty('meetingUrl');
+    expect(await service.get(a.id, sellerId)).toHaveProperty(
+      'meetingUrl',
+      'https://meet.example.com/private',
+    );
+    await expect(service.get(a.id, randomUUID())).rejects.toThrow();
+    const userId = randomUUID();
+    const e = await service.enroll(a.id, userId);
+    expect((await service.mine(userId)).items[0].activity).not.toHaveProperty(
+      'meetingUrl',
+    );
+    await service.payment(e.id, {
+      userId,
+      amountCents: 1000,
+      orderId: randomUUID(),
+      status: 'CONFIRMED',
+    });
+    expect((await service.mine(userId)).items[0].activity).toHaveProperty(
+      'meetingUrl',
+      'https://meet.example.com/private',
+    );
+    await service.cancel(e.id, userId);
+    expect((await service.mine(userId)).items[0].activity).not.toHaveProperty(
+      'meetingUrl',
+    );
+  });
+  it('completes legacy metadata with enrollment history without changing enrollment or protected activity fields', async () => {
+    const legacy = await create(1000, 2);
+    const sellerId = randomUUID(),
+      userId = randomUUID();
+    await db.activity.update({ where: { id: legacy.id }, data: { sellerId } });
+    const enrollment = await service.enroll(legacy.id, userId);
+    const metadata = {
+      modality: 'ONLINE' as const,
+      instructors: [{ name: 'Instrutor de teste', bio: 'Biografia de teste.' }],
+      meetingUrl: 'https://meet.example.com/legacy',
+    };
+    await expect(
+      service.updateDetails(legacy.id, metadata, randomUUID()),
+    ).rejects.toThrow();
+    await expect(
+      service.updateDetails(
+        legacy.id,
+        { ...metadata, priceCents: 0 } as any,
+        sellerId,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      service.updateDetails(
+        legacy.id,
+        { ...metadata, capacity: 100, sessions: [] } as any,
+        sellerId,
+      ),
+    ).rejects.toThrow();
+    await service.updateDetails(legacy.id, metadata, sellerId);
+    const current = await db.activity.findUniqueOrThrow({
+      where: { id: legacy.id },
+    });
+    expect(current).toMatchObject({
+      ...metadata,
+      priceCents: 1000,
+      capacity: 2,
+      enrollmentDeadline: legacy.enrollmentDeadline,
+    });
+    expect(
+      await db.enrollment.findUniqueOrThrow({ where: { id: enrollment.id } }),
+    ).toEqual(enrollment);
+    expect(await service.get(legacy.id)).not.toHaveProperty('meetingUrl');
+    expect((await service.mine(userId)).items[0].activity).not.toHaveProperty(
+      'meetingUrl',
+    );
+    await service.setStatus(legacy.id, 'DRAFT', sellerId);
+    await service.setStatus(legacy.id, 'PUBLISHED', sellerId);
+    await service.payment(enrollment.id, {
+      userId,
+      amountCents: 1000,
+      orderId: randomUUID(),
+      status: 'CONFIRMED',
+    });
+    expect((await service.mine(userId)).items[0].activity).toHaveProperty(
+      'meetingUrl',
+      metadata.meetingUrl,
+    );
+    await expect(
+      service.updateDetails(legacy.id, { meetingUrl: '' }, sellerId),
+    ).rejects.toThrow();
+    expect(
+      (await db.activity.findUniqueOrThrow({ where: { id: legacy.id } }))
+        .meetingUrl,
+    ).toBe(metadata.meetingUrl);
+  });
   it('never overbooks the last seats across simultaneous independent requests', async () => {
     const a = await create();
     const results = await Promise.allSettled(

@@ -236,11 +236,21 @@ enum EnrollmentStatus {
   EXPIRED
   @@schema("catalog")
 }
+enum ActivityModality {
+  IN_PERSON
+  ONLINE
+  HYBRID
+  @@schema("catalog")
+}
 model Activity {
   id String @id @default(uuid()) @db.Uuid
   sellerId String? @db.Uuid
   title String
   description String
+  instructors Json @default("[]")
+  modality ActivityModality?
+  venue String?
+  meetingUrl String?
   kind ActivityKind
   status ActivityStatus @default(DRAFT)
   priceCents Int @default(0)
@@ -334,5 +344,31 @@ model AnalyticsConsent {
 
   @@index([createdAt])
   @@map("consentimentos_analytics")
+  @@schema("catalog")
+}
+
+model ContactSubmission {
+  id String @id @db.Uuid
+  requestHash String @db.VarChar(64)
+  name String @db.VarChar(120)
+  email String @db.VarChar(254)
+  subject String @db.VarChar(160)
+  message String @db.VarChar(5000)
+  status String @default("NEW") @db.VarChar(10)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  actions ContactAction[]
+  @@index([createdAt, id])
+  @@schema("catalog")
+}
+
+model ContactAction {
+  id String @id @default(uuid()) @db.Uuid
+  contactId String @db.Uuid
+  actorId String @db.Uuid
+  status String @db.VarChar(10)
+  createdAt DateTime @default(now())
+  contact ContactSubmission @relation(fields:[contactId], references:[id])
+  @@index([contactId,createdAt])
   @@schema("catalog")
 }

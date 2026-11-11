@@ -13,6 +13,11 @@ const SENSITIVE_KEYS = new Set([
   'cookies',
   'authorization',
   'x-internal-api-key',
+  'name',
+  'email',
+  'subject',
+  'message',
+  'meetingurl',
 ]);
 
 export function redactSensitive(value: unknown): unknown {

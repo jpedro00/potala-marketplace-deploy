@@ -19,13 +19,28 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ActivityKind, ActivityStatus } from '@prisma/client';
+import { ActivityKind, ActivityModality, ActivityStatus } from '@prisma/client';
+export class ActivityInstructorDto {
+  @IsString() @Length(1, 160) name!: string;
+  @IsString() @Length(1, 2000) bio!: string;
+}
 export class ActivitySessionDto {
   @IsString() @Length(1, 160) title!: string;
   @IsDateString({ strict: true }) startsAt!: string;
   @IsDateString({ strict: true }) endsAt!: string;
 }
-export class SaveActivityDto {
+export class ActivityDetailsDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ActivityInstructorDto)
+  instructors?: ActivityInstructorDto[];
+  @IsOptional() @IsEnum(ActivityModality) modality?: ActivityModality;
+  @IsOptional() @IsString() @MaxLength(1000) venue?: string;
+  @IsOptional() @IsString() @MaxLength(2048) meetingUrl?: string;
+}
+export class SaveActivityDto extends ActivityDetailsDto {
   @IsString() @Length(3, 160) title!: string;
   @IsString() @Length(1, 20000) description!: string;
   @IsEnum(ActivityKind) kind!: ActivityKind;

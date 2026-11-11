@@ -1,3 +1,4 @@
+import { DOMAIN_REPORTS, ReportsDomainClient } from './reports-domain.client';
 import {
   BadRequestException,
   ForbiddenException,
@@ -8,7 +9,20 @@ import { parseAccessClaims } from '../../common/permissions/access-claims';
 import { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { Prisma } from '@prisma/client';
 import { Workbook } from 'exceljs';
+const FINANCIAL_REPORTS = new Set(['sales', 'payments', 'refunds', 'payouts']);
 export const REPORTS = {
+  refunds: {
+    label: 'Estornos solicitados',
+    model: 'refundRequest',
+    seller: 'global',
+    fields: [
+      'id',
+      'paymentTransactionId',
+      'amountCents',
+      'status',
+      'createdAt',
+    ],
+  },
   sales: {
     label: 'Vendas por loja',
     model: 'sellerOrder',
@@ -19,8 +33,10 @@ export const REPORTS = {
       'sellerId',
       'status',
       'subtotalCents',
+      'discountCents',
       'shippingCents',
       'commissionCents',
+      'gatewayFeeCents',
       'sellerNetCents',
       'createdAt',
     ],
@@ -116,22 +132,40 @@ export function csv(
 }
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly domains?: ReportsDomainClient,
+  ) {}
   list() {
-    return Object.entries(REPORTS).map(([key, v]) => ({
-      key,
-      label: v.label,
-      scoped: v.seller !== 'global',
-    }));
+    return [
+      ...Object.entries(DOMAIN_REPORTS).map(([key, v]) => ({
+        key,
+        label: v.label,
+        scoped: v.scoped,
+      })),
+      {
+        key: 'payouts',
+        label: 'Repasses (previsão e estado de integração)',
+        scoped: true,
+      },
+      ...Object.entries(REPORTS).map(([key, v]) => ({
+        key,
+        label: v.label,
+        scoped: v.seller !== 'global',
+      })),
+    ];
   }
-  scope(user: AuthenticatedUser): string[] | null {
+  scope(
+    user: AuthenticatedUser,
+    permission = 'reports:operational:export',
+  ): string[] | null {
     const claims = parseAccessClaims(user);
     if (claims.kind !== 'available')
       throw new ForbiddenException('Authoritative grants required');
     if (claims.isSuperAdmin) return null;
     const grants = (claims.grants ?? []).filter(
       (g) =>
-        g.permissions.has('reports:operational:export') &&
+        g.permissions.has(permission) &&
         !g.revoked &&
         (!g.expiresAt || g.expiresAt > new Date()),
     );
@@ -144,17 +178,75 @@ export class ReportsService {
       ),
     ];
     if (!sellers.length)
-      throw new ForbiddenException('Report export grant required');
+      throw new ForbiddenException(
+        `Report export grant required: ${permission}`,
+      );
     return sellers;
+  }
+  private exportScope(user: AuthenticatedUser, key: string): string[] | null {
+    const operational = this.scope(user);
+    if (!FINANCIAL_REPORTS.has(key)) return operational;
+    const financial = this.scope(user, 'reports:financial:export');
+    if (operational === null) return financial;
+    if (financial === null) return operational;
+    const shared = operational.filter((id) => financial.includes(id));
+    if (!shared.length)
+      throw new ForbiddenException(
+        'Operational and financial report grants have no shared seller scope',
+      );
+    return shared;
   }
   async rows(
     user: AuthenticatedUser,
     key: string,
     query: { sellerId?: string; from?: string; to?: string; status?: string },
-  ) {
-    const config = Object.hasOwn(REPORTS,key) ? REPORTS[key as keyof typeof REPORTS] : undefined;
+  ): Promise<{ rows: Record<string, unknown>[]; fields: readonly string[] }> {
+    if (Object.hasOwn(DOMAIN_REPORTS, key)) {
+      const domain = DOMAIN_REPORTS[key as keyof typeof DOMAIN_REPORTS];
+      const allowed = this.scope(user);
+      if (allowed && !domain.scoped)
+        throw new ForbiddenException('This report requires GLOBAL scope');
+      if (query.sellerId && !/^[0-9a-f-]{36}$/i.test(query.sellerId))
+        throw new BadRequestException('Invalid sellerId');
+      if (
+        allowed &&
+        query.sellerId &&
+        !allowed.includes(query.sellerId.toLowerCase())
+      )
+        throw new ForbiddenException('Seller outside grant');
+      if (query.sellerId && !domain.scoped)
+        throw new BadRequestException('This view has no seller filter');
+      if (allowed && allowed.length > 100 && !query.sellerId)
+        throw new BadRequestException(
+          'Choose a seller for grants exceeding 100 stores',
+        );
+      if (!this.domains)
+        throw new BadRequestException('Report source unavailable');
+      return this.domains.rows(key as keyof typeof DOMAIN_REPORTS, {
+        from: query.from,
+        to: query.to,
+        status: query.status,
+        sellerIds: query.sellerId
+          ? [query.sellerId.toLowerCase()]
+          : (allowed ?? undefined),
+      });
+    }
+    if (key === 'payouts') {
+      const result = await this.rows(user, 'sales', query);
+      return {
+        rows: result.rows.map((row) => ({
+          ...row,
+          payoutState: 'NOT_INTEGRATED',
+          paidPayoutCents: null,
+        })),
+        fields: [...result.fields, 'payoutState', 'paidPayoutCents'],
+      };
+    }
+    const config = Object.hasOwn(REPORTS, key)
+      ? REPORTS[key as keyof typeof REPORTS]
+      : undefined;
     if (!config) throw new BadRequestException('Unknown report');
-    const allowed = this.scope(user);
+    const allowed = this.exportScope(user, key);
     if (allowed && config.seller === 'global')
       throw new ForbiddenException('This report requires GLOBAL scope');
     if (query.sellerId && !/^[0-9a-f-]{36}$/i.test(query.sellerId))
@@ -207,11 +299,18 @@ export class ReportsService {
       const values = Prisma.dmmf.datamodel.enums
         .find((e) => e.name === field?.type)
         ?.values.map((v) => v.name);
-      if (!values?.includes(query.status))
+      if (
+        !(config.model === 'refundRequest'
+          ? ['PREPARED', 'CANCELLED'].includes(query.status)
+          : values?.includes(query.status))
+      )
         throw new BadRequestException('Unknown status for view');
       where.status = query.status;
     }
-    const select = Object.fromEntries(config.fields.map((f) => [f, true]));
+    const select: Record<string, unknown> = Object.fromEntries(
+      config.fields.map((f) => [f, true]),
+    );
+    if (key === 'sales') select.order = { select: { status: true } };
     // One bounded database query for the entire filtered export, independent of UI pagination.
     const delegate = (
       this.prisma as unknown as Record<
@@ -229,6 +328,25 @@ export class ReportsService {
       throw new BadRequestException(
         'Export exceeds 10000 rows; narrow date/seller filters',
       );
+    if (key === 'sales')
+      return {
+        rows: rows.map(({ order, ...row }) => {
+          const orderStatus =
+            (order as { status: string } | undefined)?.status ?? null;
+          return {
+            ...row,
+            orderStatus,
+            paidTurnoverCents:
+              orderStatus &&
+              ['PAID', 'FULFILLING', 'COMPLETED'].includes(orderStatus)
+                ? Number(row.subtotalCents) -
+                  Number(row.discountCents) +
+                  Number(row.shippingCents)
+                : 0,
+          };
+        }),
+        fields: [...config.fields, 'orderStatus', 'paidTurnoverCents'],
+      };
     return { rows, fields: config.fields };
   }
   async export(

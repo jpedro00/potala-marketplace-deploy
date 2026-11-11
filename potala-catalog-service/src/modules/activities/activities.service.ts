@@ -9,6 +9,7 @@ import { ActivityKind, ActivityStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
   ActivityPaymentDto,
+  ActivityDetailsDto,
   MaterialDto,
   SaveActivityDto,
 } from './activities.dto';
@@ -22,6 +23,12 @@ import {
 } from '../../common/pagination/pagination';
 import { validateMaterialFile } from './material-files';
 const publicInclude = { sessions: { orderBy: { startsAt: 'asc' as const } } };
+function withoutMeetingLink<T extends { meetingUrl?: string | null }>(
+  activity: T,
+) {
+  const { meetingUrl: _privateLink, ...publicActivity } = activity;
+  return publicActivity;
+}
 @Injectable()
 export class ActivitiesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -51,7 +58,10 @@ export class ActivitiesService {
       ...prismaIdCursorArgs(limit, cursor),
       orderBy: PAGINATION_ORDER_CREATED_AT_ID_DESC,
     });
-    return buildPage(rows, limit);
+    return buildPage(
+      !admin && sellerId === undefined ? rows.map(withoutMeetingLink) : rows,
+      limit,
+    );
   }
   async get(id: string, sellerId?: string, admin = false) {
     const a = await this.prisma.activity.findFirst({
@@ -63,7 +73,7 @@ export class ActivitiesService {
       include: publicInclude,
     });
     if (!a) throw new NotFoundException('Atividade não encontrada');
-    return a;
+    return admin || sellerId ? a : withoutMeetingLink(a);
   }
   async create(dto: SaveActivityDto, sellerId?: string) {
     this.validate(dto);
@@ -74,6 +84,10 @@ export class ActivitiesService {
     return this.prisma.activity.create({
       data: {
         ...dto,
+        instructors: dto.instructors?.map((i) => ({
+          name: i.name.trim(),
+          bio: i.bio.trim(),
+        })),
         sellerId,
         enrollmentDeadline: new Date(dto.enrollmentDeadline),
         sessions: {
@@ -154,6 +168,10 @@ export class ActivitiesService {
         where: { id },
         data: {
           ...dto,
+          instructors: dto.instructors?.map((i) => ({
+            name: i.name.trim(),
+            bio: i.bio.trim(),
+          })),
           enrollmentDeadline: new Date(dto.enrollmentDeadline),
           sessions: {
             create: dto.sessions.map((s) => ({
@@ -167,7 +185,49 @@ export class ActivitiesService {
       });
     });
   }
+  async updateDetails(id: string, dto: ActivityDetailsDto, sellerId?: string) {
+    const allowed = ['instructors', 'modality', 'venue', 'meetingUrl'];
+    if (Object.keys(dto).some((key) => !allowed.includes(key)))
+      throw new BadRequestException(
+        'A edição de detalhes aceita somente instrutores, modalidade, local e link',
+      );
+    if (dto.meetingUrl?.trim()) this.validateMeetingUrl(dto.meetingUrl);
+    return this.prisma.$transaction(async (tx) => {
+      await this.lock(tx, id);
+      const activity = await tx.activity.findUniqueOrThrow({ where: { id } });
+      if (sellerId && activity.sellerId !== sellerId)
+        throw new NotFoundException();
+      if (activity.status === 'CANCELLED')
+        throw new ConflictException('Atividade cancelada é terminal');
+      const data = {
+        ...(dto.instructors !== undefined
+          ? {
+              instructors:
+                dto.instructors?.map((i) => ({
+                  name: i.name.trim(),
+                  bio: i.bio.trim(),
+                })) ?? [],
+            }
+          : {}),
+        ...(dto.modality !== undefined ? { modality: dto.modality } : {}),
+        ...(dto.venue !== undefined
+          ? { venue: dto.venue?.trim() ?? null }
+          : {}),
+        ...(dto.meetingUrl !== undefined
+          ? { meetingUrl: dto.meetingUrl?.trim() ?? null }
+          : {}),
+      };
+      if (activity.status === 'PUBLISHED')
+        this.validatePublication({ ...activity, ...data });
+      return tx.activity.update({
+        where: { id },
+        data,
+        include: publicInclude,
+      });
+    });
+  }
   private validate(dto: SaveActivityDto) {
+    if (dto.meetingUrl?.trim()) this.validateMeetingUrl(dto.meetingUrl);
     try {
       new Intl.DateTimeFormat('pt-BR', { timeZone: dto.timezone });
     } catch {
@@ -196,6 +256,65 @@ export class ActivitiesService {
         );
     });
   }
+  private validateMeetingUrl(value: string) {
+    try {
+      const url = new URL(value);
+      const host = url.hostname.toLowerCase().replace(/\.+$/, '');
+      if (
+        url.protocol !== 'https:' ||
+        url.username ||
+        url.password ||
+        host === 'localhost' ||
+        host.endsWith('.localhost') ||
+        !host.includes('.') ||
+        host.endsWith('.local') ||
+        host === '[::1]' ||
+        /^\d+\.\d+\.\d+\.\d+$/.test(host)
+      )
+        throw new Error();
+    } catch {
+      throw new BadRequestException(
+        'Link do encontro deve usar HTTPS em domínio público, sem credenciais',
+      );
+    }
+  }
+  private validatePublication(a: {
+    modality?: string | null;
+    venue?: string | null;
+    meetingUrl?: string | null;
+    instructors?: unknown;
+  }) {
+    if (!a.modality)
+      throw new BadRequestException('Informe a modalidade antes de publicar');
+    if (
+      !Array.isArray(a.instructors) ||
+      !a.instructors.length ||
+      a.instructors.length > 20 ||
+      a.instructors.some(
+        (i) =>
+          !i ||
+          typeof i !== 'object' ||
+          typeof i.name !== 'string' ||
+          !i.name.trim() ||
+          i.name.length > 160 ||
+          typeof i.bio !== 'string' ||
+          !i.bio.trim() ||
+          i.bio.length > 2000,
+      )
+    )
+      throw new BadRequestException(
+        'Informe nome e biografia dos instrutores antes de publicar',
+      );
+    if (a.modality !== 'ONLINE' && !a.venue?.trim())
+      throw new BadRequestException('Informe o local antes de publicar');
+    if (a.modality !== 'IN_PERSON') {
+      if (!a.meetingUrl?.trim())
+        throw new BadRequestException(
+          'Informe o link do encontro antes de publicar',
+        );
+      this.validateMeetingUrl(a.meetingUrl);
+    }
+  }
   private async lock(tx: Prisma.TransactionClient, id: string) {
     const rows = await tx.$queryRaw<
       Array<{ id: string }>
@@ -217,6 +336,7 @@ export class ActivitiesService {
       await this.lock(tx, id);
       const a = await tx.activity.findUniqueOrThrow({ where: { id } });
       if (sellerId && a.sellerId !== sellerId) throw new NotFoundException();
+      if (status === 'PUBLISHED') this.validatePublication(a);
       if (status === 'PUBLISHED' && a.priceCents > 0 && !a.sellerId)
         throw new BadRequestException(
           'Atividade paga exige loja responsável pelo recebimento',
@@ -299,7 +419,16 @@ export class ActivitiesService {
       orderBy: PAGINATION_ORDER_CREATED_AT_ID_DESC,
       ...prismaIdCursorArgs(limit, cursor),
     });
-    return buildPage(rows, limit);
+    return buildPage(
+      rows.map((e) => ({
+        ...e,
+        activity:
+          e.status === 'CONFIRMED' && e.activity.status === 'PUBLISHED'
+            ? e.activity
+            : withoutMeetingLink(e.activity),
+      })),
+      limit,
+    );
   }
   async cancel(id: string, userId: string) {
     const e = await this.prisma.enrollment.findFirst({ where: { id, userId } });

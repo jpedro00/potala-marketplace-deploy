@@ -22,7 +22,7 @@ const identity = new PrismaClient({ datasourceUrl: `${database}?schema=identity`
 const password = randomUUID();
 const suffix = randomUUID().slice(0, 8);
 const adminEmail = `admin-${suffix}@example.test`;
-const origin = 'http://localhost:3000';
+const origin = process.env.LOCAL_FRONTEND_ORIGIN ?? 'http://localhost:3000';
 const base = 'http://127.0.0.1:18080/api/v1';
 const env = {
   PATH: process.env.PATH, SystemRoot: process.env.SystemRoot,
@@ -147,7 +147,7 @@ try {
     } else assert.match(bytes.toString('utf8'), /sellerId/);
   }
   const future = hours => new Date(Date.now() + hours * 3600000).toISOString();
-  const activity = (await call('/admin/activities', {method:'POST',expected:201,cookie:admin,data:{title:`Curso ${suffix}`,description:'Material de homologação',kind:'COURSE',priceCents:0,capacity:2,timezone:'America/Sao_Paulo',enrollmentDeadline:future(1),sessions:[{title:'Sessão',startsAt:future(2),endsAt:future(3)}]}})).data;
+  const activity = (await call('/admin/activities', {method:'POST',expected:201,cookie:admin,data:{title:`Curso ${suffix}`,description:'Material de homologação',kind:'COURSE',priceCents:0,capacity:2,timezone:'America/Sao_Paulo',modality:'IN_PERSON',venue:'Sala local de homologação',instructors:[{name:'Instrutor de teste',bio:'Perfil fictício no banco local.'}],enrollmentDeadline:future(1),sessions:[{title:'Sessão',startsAt:future(2),endsAt:future(3)}]}})).data;
   await call(`/admin/activities/${activity.id}`,{method:'PATCH',cookie:admin,data:{status:'PUBLISHED'}});
   const material = (await call(`/admin/activities/${activity.id}/materials`,{method:'POST',cookie:admin,expected:201,data:{title:'Apoio',filename:'apoio.txt',content:'Material de teste'}})).data;
   const enrollment = (await call(`/activities/${activity.id}/enroll`,{method:'POST',cookie:buyer,expected:201})).data;
@@ -157,12 +157,34 @@ try {
   const sessionId=randomUUID();
   await call('/public/analytics/events',{method:'POST',expected:202,data:{id:randomUUID(),sessionId,consent:true,event:'page_view'}});
   await call('/public/analytics/events',{method:'POST',expected:400,data:{id:randomUUID(),sessionId,consent:true,event:'purchase'}});
+  const contactData={id:randomUUID(),name:'Cliente local',email:`contact-${suffix}@example.test`,subject:'Homologação de contato',message:'Solicitação de teste local com persistência.',analyticsConsent:true,analyticsSessionId:sessionId};
+  const contact=(await call('/public/contact',{method:'POST',expected:202,data:contactData})).data;
+  assert.equal(contact.protocol,contactData.id);
+  assert.equal((await call('/public/contact',{method:'POST',expected:202,data:contactData})).data.protocol,contactData.id);
+  await call(`/admin/contacts/${contact.protocol}`,{cookie:buyer,expected:403});
+  assert.equal((await call(`/admin/contacts/${contact.protocol}`,{cookie:admin})).data.subject,contactData.subject);
+  await call(`/admin/contacts/${contact.protocol}`,{method:'PATCH',cookie:admin,data:{status:'READ'}});
+  for(const view of ['products','stock','vendors','customers','activities','sessions','enrollments','contacts','refunds','payouts']) {
+    const response=await fetch(`${base}/admin/reports/${view}/export?format=csv`,{headers:{origin,cookie:admin},signal:AbortSignal.timeout(15000)});
+    const body=await response.text();assert.equal(response.status,200,`${view}: ${body}`);assert.ok(body.trim().length>0);
+    await call(`/admin/reports/${view}/export?format=csv`,{cookie:buyer,expected:403});
+  }
+  const summary=(await call('/admin/analytics',{cookie:admin})).data;
+  assert.ok(summary.events.find(event=>event.event==='contact_submit'&&event.count>=1));
   await call('/public/analytics/withdraw',{method:'POST',data:{sessionId}});
   await call('/admin/analytics',{cookie:admin});
   await call('/internal/sessions/introspect', { method: 'POST', data: {}, expected: 404 });
   await call('/auth/logout', { method: 'POST', cookie: buyer, expected: 204 });
   await call('/auth/me', { cookie: buyer, expected: 401 });
   console.log('PASS: five processes, health, login, sellers, products, two-seller checkout (mock), idempotent replay, stock, seller isolation, internal block and logout.');
+  console.log('PASS: contract reports, contacts persisted/idempotent/admin-only, server-confirmed contact analytics, structured course details and downloads.');
+  await mkdir(join(root,'artifacts'),{recursive:true});
+  await writeFile(join(root,'artifacts/completion-flow.log'),logs.join('\n'));
+  await writeFile(join(root,'artifacts/closure-final-smoke.json'),JSON.stringify({passed:true,checkedAt:new Date().toISOString(),target:base,checks:['five services ready','auth and logout','seller isolation','two seller mock checkout','split cents and idempotency','stock once','CSV and XLSX readback','all contract report origins','structured course enrollment and download','contact idempotency and admin authorization','server-confirmed contact analytics','internal routes blocked']},null,2));
+  if(process.env.KEEP_LOCAL_RUNTIME==='1') {
+    console.log('Local runtime ready at 127.0.0.1:18080; stop with Ctrl+C.');
+    await new Promise(resolve=>process.once('SIGINT',resolve));
+  }
 } finally {
   if (running) { running.stop(); await running.finished; }
   await identity.$disconnect();

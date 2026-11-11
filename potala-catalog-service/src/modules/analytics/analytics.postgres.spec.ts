@@ -26,7 +26,7 @@ const url = process.env.ANALYTICS_TEST_DATABASE_URL;
   });
   it('deduplicates without aborting PostgreSQL transaction and rejects conflicting IDs', async () => {
     const dto = {id:randomUUID(), sessionId:sessions[0], consent:true as const, event:'page_view' as const};
-    const results = await Promise.all(Array.from({length:5}, () => service.record(dto)));
+    const results = await Promise.all(Array.from({length:5}, (_,i) => service.record({...dto,sessionId:i%2?dto.sessionId.toUpperCase():dto.sessionId})));
     expect(results.filter(r => !r.duplicate)).toHaveLength(1);
     await expect(service.record({...dto,event:'sign_up'})).rejects.toThrow('already used');
   }, 30000);

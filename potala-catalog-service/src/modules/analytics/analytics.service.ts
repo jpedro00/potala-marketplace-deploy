@@ -34,8 +34,8 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       }] });
       if (inserted.count) return { accepted: true, duplicate: false };
       const existing = await tx.analyticsEvent.findUnique({ where: { id: dto.id } });
-      if (!existing || existing.sessionId !== dto.sessionId || existing.event !== dto.event
-        || existing.productId !== (dto.productId ?? null) || existing.activityId !== (dto.activityId ?? null)
+      if (!existing || existing.sessionId !== dto.sessionId.toLowerCase() || existing.event !== dto.event
+        || existing.productId !== (dto.productId?.toLowerCase() ?? null) || existing.activityId !== (dto.activityId?.toLowerCase() ?? null)
         || existing.quantity !== (dto.quantity ?? null)) {
         throw new ConflictException('Analytics event id already used');
       }
@@ -52,7 +52,7 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
       }] });
       if (inserted.count) return { accepted: true, duplicate: false };
       const existing = await tx.analyticsEvent.findUnique({ where: { orderId: dto.orderId } });
-      if (!existing || existing.sessionId !== dto.sessionId || existing.valueCents !== dto.valueCents) {
+      if (!existing || existing.sessionId !== dto.sessionId.toLowerCase() || existing.valueCents !== dto.valueCents) {
         throw new ConflictException('Purchase analytics does not match recorded order');
       }
       return { accepted: true, duplicate: true };
@@ -70,7 +70,7 @@ export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
 
   private locked<T>(sessionId: string, work: (tx: Prisma.TransactionClient) => Promise<T>) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`analytics:${sessionId}`}, 0))`);
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`analytics:${sessionId.toLowerCase()}`}, 0))`);
       return work(tx);
     }, { maxWait: 10000, timeout: 10000 });
   }
