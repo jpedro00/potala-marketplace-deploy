@@ -15,6 +15,7 @@ describe('InternalService', () => {
           priceCents: null,
           product: {
             id: 'p1',
+            categoryId: 'category-1',
             sellerId: 's1',
             status: 'ACTIVE',
             title: 'Produto 1',
@@ -29,6 +30,7 @@ describe('InternalService', () => {
           priceCents: 2500,
           product: {
             id: 'p1',
+            categoryId: 'category-1',
             sellerId: 's1',
             status: 'ACTIVE',
             title: 'Produto 1',
@@ -48,6 +50,8 @@ describe('InternalService', () => {
         {
           variantId: '00000000-0000-4000-8000-000000000001',
           productId: 'p1',
+          categoryId: 'category-1',
+          itemType: 'PHYSICAL',
           sellerId: 's1',
           productStatus: 'ACTIVE',
           productTitle: 'Produto 1',
@@ -59,6 +63,8 @@ describe('InternalService', () => {
         {
           variantId: '00000000-0000-4000-8000-000000000002',
           productId: 'p1',
+          categoryId: 'category-1',
+          itemType: 'PHYSICAL',
           sellerId: 's1',
           productStatus: 'ACTIVE',
           productTitle: 'Produto 1',

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppConfig } from '../config/configuration';
 import { SellerContext } from '../common/types/authenticated-user';
 import { INTERNAL_API_KEY_HEADER } from '../common/constants/auth.constants';
+import { DeliverySettings } from '../modules/orders/shipping';
 
 /**
  * Needed for the seller-orders read endpoints (GET /seller/orders,
@@ -16,6 +17,24 @@ import { INTERNAL_API_KEY_HEADER } from '../common/constants/auth.constants';
  */
 @Injectable()
 export class SellersServiceClient {
+  async getNotificationRecipients(sellerId: string): Promise<string[]> {
+    const {baseUrl, apiKey, timeoutMs} = this.configService.get('sellersService', {infer: true});
+    const response = await fetch(`${baseUrl}/api/v1/internal/sellers/${sellerId}/notification-recipients`, {headers: {[INTERNAL_API_KEY_HEADER]: apiKey}, signal: AbortSignal.timeout(timeoutMs)});
+    if (!response.ok) throw new ServiceUnavailableException('Seller notification recipients unavailable');
+    const body = await response.json();
+    if (!Array.isArray(body.userIds) || body.userIds.length > 100 || !body.userIds.every((id: unknown) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id))) throw new ServiceUnavailableException('Invalid seller recipient contract');
+    return body.userIds;
+  }
+  async getDeliverySettings(sellerId: string): Promise<DeliverySettings> {
+    const {baseUrl, apiKey, timeoutMs} = this.configService.get('sellersService', {infer: true});
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/internal/sellers/${sellerId}/delivery-settings`, {headers: {[INTERNAL_API_KEY_HEADER]: apiKey}, signal: AbortSignal.timeout(timeoutMs)});
+      if (!response.ok) throw new Error('Unavailable');
+      const value = await response.json();
+      if (value.sellerId !== sellerId || typeof value.pickupEnabled !== 'boolean' || typeof value.deliveryEnabled !== 'boolean' || !Number.isInteger(value.revision)) throw new Error('Invalid delivery contract');
+      return value;
+    } catch { throw new ServiceUnavailableException('Seller delivery settings are unavailable'); }
+  }
   private readonly logger = new Logger(SellersServiceClient.name);
 
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}

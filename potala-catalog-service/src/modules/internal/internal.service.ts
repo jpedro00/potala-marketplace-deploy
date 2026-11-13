@@ -13,6 +13,7 @@ export interface ResolvedProductVariant {
   sellerId: string;
   productStatus: string;
   productTitle: string;
+  itemType?: string;
   sku: string;
   variantName: string;
   /** variant.priceCents override when set, else product.priceCents — the same "effective price" the storefront would show. */
@@ -57,6 +58,7 @@ export class InternalService {
             status: true,
             title: true,
             priceCents: true,
+              itemType: true,
           },
         },
         inventory: { select: { quantity: true, reservedQuantity: true } },
@@ -70,6 +72,7 @@ export class InternalService {
       sellerId: variant.product.sellerId,
       productStatus: variant.product.status,
       productTitle: variant.product.title,
+        itemType: variant.product.itemType ?? 'PHYSICAL',
       sku: variant.sku,
       variantName: variant.name,
       unitPriceCents: variant.priceCents ?? variant.product.priceCents,

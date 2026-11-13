@@ -24,6 +24,8 @@ export interface AppConfig {
   };
   /** Shared secret every caller of this service's own /internal/* must present. */
   internalApiKey: string;
+  catalogService?: {baseUrl:string;apiKey:string;timeoutMs:number};
+  sellerNotificationDispatchEnabled?: boolean;
   /**
    * Unlike identity-service's optional SellersServiceClient config,
    * identity-service is a hard dependency for every authenticated route in

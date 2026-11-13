@@ -108,6 +108,9 @@ type Expected =
 
 /** Matriz pretendida (F1.3). Mudança de rota administrativa exige atualizar aqui. */
 const EXPECTED_ADMIN_MATRIX: Record<string, Expected> = {
+  'GET /admin/orders/seller-orders/:orderId/fiscal-attachments': {permission:'orders:order:read',mode:'COLLECTION'},
+  'GET /admin/orders/seller-orders/:orderId/fiscal-attachments/:fileId': {permission:'orders:order:read',mode:'COLLECTION'},
+  'DELETE /admin/orders/seller-orders/:orderId/fiscal-attachments/:fileId': {permission:'orders:order:update',mode:'COLLECTION'},
   'GET /admin/reports': {permission:'reports:operational:export',mode:'COLLECTION'},
   'GET /admin/reports/:view/export': {permission:'reports:operational:export',mode:'COLLECTION'},
   'GET /admin/finance/policies': {permission:'finance:commission:read',mode:'PLATFORM'},

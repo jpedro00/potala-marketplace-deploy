@@ -4,6 +4,7 @@ import { ProductsService } from './products.service';
 import { AdminProductsController } from './admin-products.controller';
 import { SellerProductsController } from './seller-products.controller';
 import { PublicProductsController } from './public-products.controller';
+import { AttributesModule } from '../product-attributes/attributes.module';
 
 /**
  * Imports InventoryModule so ProductsService can call InventoryService
@@ -13,7 +14,7 @@ import { PublicProductsController } from './public-products.controller';
  * lives here too rather than as a new controller inside InventoryModule.
  */
 @Module({
-  imports: [InventoryModule],
+  imports: [InventoryModule,AttributesModule],
   controllers: [
     AdminProductsController,
     SellerProductsController,

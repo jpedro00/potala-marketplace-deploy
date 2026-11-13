@@ -115,6 +115,7 @@ export class SellersService {
       reviewedAt: seller.reviewedAt,
       membershipRole: sellerContext.membershipRole,
       canOperate: seller.status === SellerStatus.ACTIVE,
+      reviewStatus: seller.status === SellerStatus.ACTIVE ? 'APPROVED' : seller.status === SellerStatus.PENDING ? seller.statusReason === 'UNDER_REVIEW' ? 'UNDER_REVIEW' : 'PENDING_DOCUMENTS' : 'BLOCKED',
       message: ONBOARDING_MESSAGES[seller.status],
     };
   }

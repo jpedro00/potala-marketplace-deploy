@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Role, UserStatus } from '@prisma/client';
@@ -18,6 +19,7 @@ import { LoginDto } from './dto/login.dto';
 import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
 import { PublicUser, toPublicUser } from './auth.serializer';
+import { RecoveryService } from './recovery.service';
 
 @Injectable()
 export class AuthService {
@@ -28,6 +30,7 @@ export class AuthService {
     private readonly passwordService: PasswordService,
     private readonly sessionService: SessionService,
     private readonly sellersServiceClient: SellersServiceClient,
+    @Optional() private readonly recoveryService?: RecoveryService,
   ) {}
 
   async registerCustomer(dto: RegisterCustomerDto): Promise<{
@@ -36,6 +39,8 @@ export class AuthService {
     customer: { id: string };
   }> {
     const email = dto.email.trim().toLowerCase();
+    if (process.env.REQUIRE_EMAIL_CONFIRMATION === 'true')
+      this.recoveryService?.ensureConfigured();
     await this.ensureEmailIsAvailable(email);
     const passwordHash = await this.passwordService.hash(dto.password);
 
@@ -44,7 +49,10 @@ export class AuthService {
         data: {
           email,
           passwordHash,
-          status: UserStatus.ACTIVE,
+          status:
+            process.env.REQUIRE_EMAIL_CONFIRMATION === 'true'
+              ? UserStatus.PENDING_VERIFICATION
+              : UserStatus.ACTIVE,
         },
       });
 
@@ -67,6 +75,8 @@ export class AuthService {
       return { user, profile, customer };
     });
 
+    if (process.env.REQUIRE_EMAIL_CONFIRMATION === 'true')
+      await this.queueConfirmation(email);
     return {
       user: toPublicUser({
         ...created.user,
@@ -101,6 +111,8 @@ export class AuthService {
     seller: CreateSellerForOwnerResult;
   }> {
     const email = dto.email.trim().toLowerCase();
+    if (process.env.REQUIRE_EMAIL_CONFIRMATION === 'true')
+      this.recoveryService?.ensureConfigured();
     await this.ensureEmailIsAvailable(email);
 
     const parsedDocument = parseBrazilianDocument(
@@ -118,7 +130,10 @@ export class AuthService {
         data: {
           email,
           passwordHash,
-          status: UserStatus.ACTIVE,
+          status:
+            process.env.REQUIRE_EMAIL_CONFIRMATION === 'true'
+              ? UserStatus.PENDING_VERIFICATION
+              : UserStatus.ACTIVE,
         },
       });
 
@@ -149,6 +164,8 @@ export class AuthService {
         description: dto.description?.trim(),
       });
 
+      if (process.env.REQUIRE_EMAIL_CONFIRMATION === 'true')
+        await this.queueConfirmation(email);
       return {
         user: toPublicUser({
           ...created.user,
@@ -161,14 +178,14 @@ export class AuthService {
         seller,
       };
     } catch (error) {
-      await this.prisma.user.delete({ where: { id: created.user.id } }).catch(
-        (cleanupError: unknown) => {
+      await this.prisma.user
+        .delete({ where: { id: created.user.id } })
+        .catch((cleanupError: unknown) => {
           this.logger.error(
             `Failed to compensate user ${created.user.id} after seller creation failure — manual cleanup required`,
             cleanupError instanceof Error ? cleanupError.stack : undefined,
           );
-        },
-      );
+        });
       throw error;
     }
   }
@@ -196,7 +213,17 @@ export class AuthService {
       throw new UnauthorizedException('Account is blocked');
     }
 
-    const { token } = await this.sessionService.createSession(user.id);
+    if (
+      user.status === UserStatus.PENDING_VERIFICATION &&
+      process.env.REQUIRE_EMAIL_CONFIRMATION === 'true'
+    ) {
+      throw new UnauthorizedException('Confirme seu e-mail antes de entrar');
+    }
+
+    const { token } = await this.sessionService.createSession(
+      user.id,
+      user.passwordHash,
+    );
     return { user: toPublicUser(user), token };
   }
 
@@ -244,6 +271,18 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('Email already registered');
+    }
+  }
+
+  private async queueConfirmation(email: string): Promise<void> {
+    try {
+      await this.recoveryService?.request(email, 'EMAIL_CONFIRMATION');
+    } catch {
+      // Registration remains valid; the account holder can request a fresh link.
+      // In particular, never compensate an already-created remote seller for a mail failure.
+      this.logger.warn(
+        'Confirmation could not be queued; account can request another link',
+      );
     }
   }
 }

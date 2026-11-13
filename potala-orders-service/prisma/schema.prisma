@@ -3,6 +3,33 @@ generator client {
   previewFeatures = ["multiSchema"]
 }
 
+/// Private bytes, never a public URL. Storage is not fiscal issuance.
+model FiscalAttachment {
+  id String @id @default(uuid()) @db.Uuid
+  sellerOrderId String @db.Uuid
+  sellerId String @db.Uuid
+  customerId String @db.Uuid
+  fileName String @db.VarChar(100)
+  mediaType String @db.VarChar(50)
+  bytes Bytes
+  sha256 String @db.Char(64)
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  @@index([sellerOrderId])
+  @@schema("orders")
+}
+
+model FiscalAttachmentAudit {
+  id String @id @default(uuid()) @db.Uuid
+  attachmentId String @db.Uuid
+  actorId String @db.Uuid
+  action String @db.VarChar(20)
+  occurredAt DateTime @default(now())
+  @@index([attachmentId])
+  @@schema("orders")
+}
+
 // Este serviço é o único dono do schema Postgres "orders" no banco Supabase
 // compartilhado. Nenhuma outra tabela do marketplace vive aqui, e este schema
 // não referencia tabelas de outros serviços por FK — customerId (Order) e
@@ -62,6 +89,7 @@ enum PaymentTransactionStatus {
 enum CouponDiscountType {
   PERCENT
   FIXED
+  SHIPPING
 
   @@schema("orders")
 }
@@ -174,7 +202,7 @@ model Order {
   /// Money CHECKs: each money column >= 0. No formula tying total to subtotal+shipping-discount
   /// (future taxes/credits/adjustments must remain possible).
   subtotalCents Int         @map("subtotal_centavos")
-  /// v1 não calcula frete — sempre 0. Ver README.md.
+  /// Authoritative sum of per-seller configured delivery/pickup snapshots.
   shippingCents Int         @default(0) @map("frete_centavos")
   discountCents Int         @default(0) @map("desconto_centavos")
   totalCents    Int         @map("total_centavos")
@@ -223,6 +251,7 @@ model OrderShippingAddress {
 }
 
 model SellerOrder {
+  shippingSnapshot Json? @map("shipping_snapshot")
   id              String            @id @default(uuid()) @db.Uuid
   orderId         String            @map("pedido_id") @db.Uuid
   /// Referência solta (UUID) a sellers.vendedores — sem FK cross-schema.

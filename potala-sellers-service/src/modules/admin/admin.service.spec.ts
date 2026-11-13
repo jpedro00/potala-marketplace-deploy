@@ -25,6 +25,14 @@ function sellerRow(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('AdminService.listSellers', () => {
+  it('blocks activation when a configured required document is not approved',async()=>{
+    const prisma=createPrismaMock();
+    prisma.seller.findUnique.mockResolvedValue(sellerRow());
+    (prisma.partnerDocumentType.findMany as jest.Mock).mockResolvedValue([{id:'type'}]);
+    (prisma.partnerDocument.findFirst as jest.Mock).mockResolvedValue({status:'CORRECTION_REQUESTED'});
+    await expect(new AdminService(prisma).updateSellerStatus('admin',ID_A,SellerStatus.ACTIVE)).rejects.toThrow('Required documents must be approved');
+    expect(prisma.seller.update).not.toHaveBeenCalled();
+  });
   it('returns the first page with the default limit', async () => {
     const prisma = createPrismaMock();
     prisma.seller.findMany.mockResolvedValue([sellerRow()]);

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { CheckoutIdempotencyStatus } from '@prisma/client';
 import { OrdersService } from './orders.service';
+import { sellerDeliveryMock } from '../../test-utils/seller-delivery.mock';
 import {
   CheckoutIdempotencyInProgressException,
   CheckoutIdempotencyService,
@@ -348,6 +349,7 @@ function setUp() {
     payment as never,
     coupons as never,
     new CheckoutIdempotencyService(db.client as never),
+    undefined, undefined, sellerDeliveryMock() as never,
   );
   const checkout = (
     customerId: string,

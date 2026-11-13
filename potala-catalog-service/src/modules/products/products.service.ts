@@ -4,6 +4,7 @@ import {
   HttpException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { CategoryStatus, Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
@@ -36,6 +37,7 @@ import {
 } from './products.constants';
 import { CreateProductDto } from './dto/create-product.dto';
 import { PublicProductsQueryDto } from './dto/public-products-query.dto';
+import { AttributesService } from '../product-attributes/attributes.service';
 
 type CatalogClient = Prisma.TransactionClient | PrismaService;
 
@@ -70,6 +72,7 @@ export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventoryService: InventoryService,
+    @Optional() private readonly attributesService?: AttributesService,
   ) {}
 
   async listForSeller(sellerId: string, query: PaginationQueryDto = {}) {
@@ -265,6 +268,9 @@ export class ProductsService {
     });
 
     const where: Prisma.ProductWhereInput = { status: ProductStatus.ACTIVE };
+    if(query.attributes&&!query.itemType)throw new BadRequestException('Select itemType for attribute filters');
+    if(query.itemType)where.itemType=query.itemType;
+    if(query.attributes)where.AND=await (this.attributesService??new AttributesService(this.prisma)).filters(query.itemType!,query.attributes);
     if (query.categoryId) {
       where.categoryId = query.categoryId;
     }

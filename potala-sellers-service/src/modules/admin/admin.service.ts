@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SellerStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { queueSellerNotification } from '../documents/seller-notifications';
 import { PrismaService } from '../../database/prisma.service';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import {
@@ -79,6 +81,15 @@ export class AdminService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`partner:${sellerId}`}))::text`;
+      if(status===SellerStatus.ACTIVE){
+        const required=await tx.partnerDocumentType.findMany({where:{active:true,required:true}});
+        for(const type of required){
+          const document=await tx.partnerDocument.findFirst({where:{sellerId,typeId:type.id},orderBy:{createdAt:'desc'}});
+          if(document?.status!=='APPROVED')throw new ConflictException('Required documents must be approved before activating the store');
+        }
+        if(required.length&&!await tx.partnerReviewEvent.findFirst({where:{sellerId,action:'UNDER_REVIEW'}}))throw new ConflictException('Partner must submit documents and accept the current agreement before activation');
+      }
       const next = await tx.seller.update({
         where: { id: sellerId },
         data: {
@@ -89,8 +100,10 @@ export class AdminService {
         },
       });
 
+      const eventId=randomUUID();
       await tx.auditLog.create({
         data: {
+          id:eventId,
           actorUserId,
           action,
           entityType: 'Seller',
@@ -98,6 +111,7 @@ export class AdminService {
           metadata: { from: seller.status, to: status, reason: reason ?? null },
         },
       });
+      await queueSellerNotification(tx,sellerId,status===SellerStatus.ACTIVE?'SELLER_APPROVED':'SELLER_CORRECTION',eventId);
 
       return next;
     });

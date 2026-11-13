@@ -3,6 +3,18 @@ generator client {
   previewFeatures = ["multiSchema"]
 }
 
+model SellerDeliverySettings {
+  sellerId String @id @db.Uuid
+  pickupEnabled Boolean @default(false)
+  pickupAddress String? @db.VarChar(500)
+  deliveryEnabled Boolean @default(false)
+  rates Json @default("[]")
+  revision Int @default(1)
+  updatedAt DateTime @updatedAt
+  @@map("seller_delivery_settings")
+  @@schema("sellers")
+}
+
 // Este serviço é o único dono do schema Postgres "sellers" no banco Supabase
 // compartilhado. Nenhuma outra tabela do marketplace vive aqui, e este schema
 // não referencia tabelas de outros serviços por FK — ver
@@ -144,5 +156,54 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("logs_auditoria")
+  @@schema("sellers")
+}
+
+model PartnerDocumentType {
+  id String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(100)
+  required Boolean @default(true)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  @@schema("sellers")
+}
+model PartnerDocument {
+  id String @id @default(uuid()) @db.Uuid
+  sellerId String @db.Uuid
+  typeId String @db.Uuid
+  filename String @db.VarChar(200)
+  mimeType String @db.VarChar(40)
+  data Bytes
+  contentHash String @db.VarChar(64)
+  status String @default("UPLOADED") @db.VarChar(24)
+  reason String? @db.VarChar(2000)
+  uploadedBy String @db.Uuid
+  createdAt DateTime @default(now())
+  @@index([sellerId,typeId,createdAt])
+  @@schema("sellers")
+}
+model PartnerReviewEvent {
+  id String @id @default(uuid()) @db.Uuid
+  sellerId String @db.Uuid
+  documentId String? @db.Uuid
+  actorId String @db.Uuid
+  action String @db.VarChar(30)
+  reason String? @db.VarChar(2000)
+  createdAt DateTime @default(now())
+  @@index([sellerId,createdAt])
+  @@schema("sellers")
+}
+model SellerNotificationJob {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  template String @db.VarChar(40)
+  idempotencyKey String @unique @db.VarChar(200)
+  status String @default("PENDING") @db.VarChar(16)
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedUntil DateTime?
+  enqueuedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([status,nextAttemptAt])
   @@schema("sellers")
 }

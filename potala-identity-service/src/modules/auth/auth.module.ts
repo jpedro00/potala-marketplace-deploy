@@ -4,10 +4,19 @@ import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
 import { SellersServiceClient } from '../../clients/sellers-service.client';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { RecoveryService } from './recovery.service';
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [AuthController],
-  providers: [AuthService, PasswordService, SessionService, SellersServiceClient],
-  exports: [AuthService, PasswordService, SessionService],
+  providers: [
+    AuthService,
+    PasswordService,
+    SessionService,
+    SellersServiceClient,
+    RecoveryService,
+  ],
+  exports: [AuthService, PasswordService, SessionService, RecoveryService],
 })
 export class AuthModule {}

@@ -205,6 +205,15 @@ export function validateEnv(env: Record<string, unknown>): AppConfig {
     'IDENTITY_SERVICE_URL',
   );
   const identityServiceApiKey = required(env, 'IDENTITY_SERVICE_API_KEY');
+  let catalogService:AppConfig['catalogService'];
+  if(readString(env,'CATALOG_SERVICE_URL')||readString(env,'CATALOG_SERVICE_API_KEY')){
+    const baseUrl=readRequiredServiceOrigin(env,'CATALOG_SERVICE_URL');
+    const parsed=new URL(baseUrl);
+    if(baseUrl!==parsed.origin)throw new Error('CATALOG_SERVICE_URL must be a bare origin');
+    const apiKey=required(env,'CATALOG_SERVICE_API_KEY');
+    if(apiKey.length<INTERNAL_API_KEY_MIN_LENGTH)throw new Error('CATALOG_SERVICE_API_KEY must contain at least sixteen characters');
+    catalogService={baseUrl,apiKey,timeoutMs:optionalInteger(env,'CATALOG_SERVICE_TIMEOUT_MS',3000,100,10000)};
+  }
 
   return {
     nodeEnv,
@@ -240,6 +249,8 @@ export function validateEnv(env: Record<string, unknown>): AppConfig {
       ),
     },
     internalApiKey,
+    ...(catalogService?{catalogService}:{}),
+    ...(readString(env,'SELLER_NOTIFICATION_DISPATCH_ENABLED')?{sellerNotificationDispatchEnabled:optionalBoolean(env,'SELLER_NOTIFICATION_DISPATCH_ENABLED',false)}:{}),
     identityService: {
       baseUrl: identityServiceUrl,
       apiKey: identityServiceApiKey,

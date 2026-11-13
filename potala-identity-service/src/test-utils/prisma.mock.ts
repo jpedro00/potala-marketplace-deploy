@@ -26,6 +26,7 @@ export type PrismaMock = {
 
 export function createPrismaMock(): PrismaMock & PrismaService {
   const tx = {
+    $queryRaw: jest.fn(),
     user: {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),

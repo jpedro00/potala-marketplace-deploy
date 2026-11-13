@@ -138,7 +138,7 @@ describe('F2.2B-A -- contratos dos eventos da outbox', () => {
   });
 });
 
-describe('F2.2B-A -- nenhum publicador existe nesta entrega', () => {
+describe('Transactional outbox mutation is isolated to its explicit inbox consumer', () => {
   const SRC = join(__dirname, '..', '..');
 
   function productionFiles(dir: string): string[] {
@@ -151,12 +151,13 @@ describe('F2.2B-A -- nenhum publicador existe nesta entrega', () => {
     });
   }
 
-  it('outbox permite INSERT e upsert idempotente de reconciliação, sem publicador ou agendamento', () => {
+  it('only the bounded dispatcher may claim/update outbox rows or schedule delivery', () => {
     const offenders: string[] = [];
     for (const file of productionFiles(SRC)) {
       if (file.includes(`${join('src', 'test-utils')}`)) {
         continue;
       }
+      if (file.endsWith('order-notification-dispatcher.ts')) continue;
       const source = readFileSync(file, 'utf8');
       const patterns = [
         /outboxEvent\.(?!(?:create|upsert)\b)[a-zA-Z]+/,
@@ -175,7 +176,7 @@ describe('F2.2B-A -- nenhum publicador existe nesta entrega', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('OrdersModule não registra nenhum provider de publicação', () => {
+  it('OrdersModule registers exactly one explicit outbox dispatcher', () => {
     const providers = (Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
       OrdersModule,
@@ -183,8 +184,6 @@ describe('F2.2B-A -- nenhum publicador existe nesta entrega', () => {
     const names = providers.map((provider) =>
       String(provider.name ?? provider.provide ?? ''),
     );
-    expect(
-      names.some((name) => /publish|dispatch|relay|outbox/i.test(name)),
-    ).toBe(false);
+    expect(names.filter(name => /publish|dispatch|relay|outbox/i.test(name))).toEqual(['OrderNotificationDispatcher']);
   });
 });

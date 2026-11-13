@@ -28,6 +28,8 @@ import { CreateSellerDto } from './dto/create-seller.dto';
 @Controller('internal')
 export class InternalController {
   constructor(private readonly internalService: InternalService) {}
+  @Get('sellers/:sellerId/notification-recipients')
+  recipients(@Param('sellerId',new ParseUUIDPipe({version:'4'})) sellerId:string){return this.internalService.notificationRecipients(sellerId);}
 
   @Get('sellers/:sellerId/payment-settings')
   paymentSettings(@Param('sellerId', new ParseUUIDPipe({version: '4'})) sellerId: string) { return this.internalService.getPaymentSettings(sellerId); }

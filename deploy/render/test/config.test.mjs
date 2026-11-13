@@ -38,6 +38,16 @@ test('maps explicit test payment mode only to Orders; adapter still requires NOD
   assert.equal(services.find(service => service.name === 'identity').env.PAYMENT_GATEWAY_MODE, undefined);
 });
 
+test('scopes notification workers and provider credentials to their owning services', () => {
+  const services = createServices({...environment(), IDENTITY_NOTIFICATION_DISPATCH_ENABLED: 'true', IDENTITY_BREVO_API_KEY: 'provider-secret', SELLERS_SELLER_NOTIFICATION_DISPATCH_ENABLED: 'true', ORDERS_ORDER_NOTIFICATION_WORKER_ENABLED: 'true'}, process.cwd());
+  const byName = Object.fromEntries(services.map(s => [s.name, s.env]));
+  assert.equal(byName.sellers.CATALOG_SERVICE_URL, 'http://127.0.0.1:3003');
+  assert.equal(byName.identity.NOTIFICATION_DISPATCH_ENABLED, 'true');
+  assert.equal(byName.sellers.SELLER_NOTIFICATION_DISPATCH_ENABLED, 'true');
+  assert.equal(byName.orders.ORDER_NOTIFICATION_WORKER_ENABLED, 'true');
+  for (const name of ['sellers', 'catalog', 'orders', 'gateway']) assert.equal(byName[name].BREVO_API_KEY, undefined);
+});
+
 test('rejects missing secrets and public port collisions before starting any child', () => {
   const env = environment();
   delete env.CATALOG_INTERNAL_API_KEY;

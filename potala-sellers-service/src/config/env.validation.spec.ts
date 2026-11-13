@@ -11,6 +11,11 @@ const baseEnv = {
 };
 
 describe('validateEnv', () => {
+  it('validates the optional policy service as a complete origin and credential pair',()=>{
+    expect(validateEnv({...baseEnv,CATALOG_SERVICE_URL:'http://localhost:3003',CATALOG_SERVICE_API_KEY:'test-catalog-key-123'}).catalogService).toEqual({baseUrl:'http://localhost:3003',apiKey:'test-catalog-key-123',timeoutMs:3000});
+    expect(()=>validateEnv({...baseEnv,CATALOG_SERVICE_URL:'http://localhost:3003'})).toThrow('CATALOG_SERVICE_API_KEY');
+    expect(()=>validateEnv({...baseEnv,CATALOG_SERVICE_URL:'file:///etc',CATALOG_SERVICE_API_KEY:'test-catalog-key-123'})).toThrow();
+  });
   it('applies every default when only the required variables are set', () => {
     const config = validateEnv(baseEnv);
 

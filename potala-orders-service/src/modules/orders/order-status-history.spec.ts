@@ -1,5 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { OrdersService } from './orders.service';
+import { sellerDeliveryMock } from '../../test-utils/seller-delivery.mock';
 import { CheckoutIdempotencyService } from './checkout-idempotency.service';
 import {
   OrderTransitionsService,
@@ -381,6 +382,7 @@ function setUp() {
     createCouponsServiceMock() as never,
     new CheckoutIdempotencyService(db.client as never),
     new OrderTransitionsService(),
+    undefined, sellerDeliveryMock() as never,
   );
   return { db, catalog, gateway, service };
 }

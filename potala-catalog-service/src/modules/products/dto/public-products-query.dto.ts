@@ -1,9 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ProductItemType } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { MAX_PRODUCT_TITLE_LENGTH } from '../products.constants';
 
 export class PublicProductsQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsEnum(ProductItemType) itemType?: ProductItemType;
+  @IsOptional() @IsString() @MaxLength(4000) attributes?: string;
   @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID('4')

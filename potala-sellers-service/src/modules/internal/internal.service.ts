@@ -38,6 +38,7 @@ export interface SellerMembershipLookup {
 
 @Injectable()
 export class InternalService {
+  async notificationRecipients(sellerId:string){const owners=await this.prisma.sellerMembership.findMany({where:{sellerId,role:'OWNER'},select:{userId:true}});return {userIds:owners.map(owner=>owner.userId)};}
   private readonly logger = new Logger(InternalService.name);
 
   constructor(

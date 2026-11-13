@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UserStatus } from '@prisma/client';
 import { Response } from 'express';
@@ -65,19 +65,35 @@ export class SessionService {
 
   async createSession(
     userId: string,
+    verifiedPasswordHash?: string,
   ): Promise<{ token: string; sessionId: string }> {
     const token = this.generateToken();
     const tokenHash = this.hashToken(token);
     const ttlDays = this.configService.get('session', { infer: true }).ttlDays;
     const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
 
-    const session = await this.prisma.session.create({
+    const data = {
       data: {
         userId,
         tokenHash,
         expiresAt,
       },
-    });
+    };
+    const session = verifiedPasswordHash
+      ? await this.prisma.$transaction(async (tx) => {
+          // Serialize with account resets, so credentials verified before a reset
+          // cannot create a fresh session after its session-revocation step.
+          await tx.$queryRaw`SELECT id FROM identity.usuarios WHERE id = ${userId}::uuid FOR UPDATE`;
+          const current = await tx.user.findUnique({ where: { id: userId } });
+          if (
+            !current ||
+            current.passwordHash !== verifiedPasswordHash ||
+            current.status === UserStatus.BLOCKED
+          )
+            throw new UnauthorizedException('Invalid credentials');
+          return tx.session.create(data);
+        })
+      : await this.prisma.session.create(data);
 
     return { token, sessionId: session.id };
   }

@@ -191,7 +191,8 @@ export class CouponsService {
   async resolveForCheckout(
     code: string,
     subtotalCents: number,
-  ): Promise<{ couponId: string; discountCents: number }> {
+    shippingCents = 0,
+  ): Promise<{ couponId: string; discountCents: number; shippingDiscountCents?: number }> {
     const normalized = code.trim().toUpperCase();
     const coupon = await this.prisma.coupon.findUnique({ where: { code: normalized } });
     if (!coupon || this.deriveStatus(coupon) !== 'active') {
@@ -199,13 +200,15 @@ export class CouponsService {
     }
 
     const rawDiscount =
+      coupon.discountType === CouponDiscountType.SHIPPING ? shippingCents :
       coupon.discountType === CouponDiscountType.PERCENT
         ? Math.round((subtotalCents * coupon.discountValue) / 100)
         : coupon.discountValue;
 
     return {
       couponId: coupon.id,
-      discountCents: Math.min(rawDiscount, subtotalCents),
+      discountCents: Math.min(rawDiscount, coupon.discountType === CouponDiscountType.SHIPPING ? shippingCents : subtotalCents),
+      ...(coupon.discountType === CouponDiscountType.SHIPPING ? {shippingDiscountCents: shippingCents} : {}),
     };
   }
 

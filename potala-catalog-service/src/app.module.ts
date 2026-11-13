@@ -1,5 +1,6 @@
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ContactModule } from './modules/contact/contact.module';
+import { LegalModule } from './modules/legal/legal.module';
 import { InternalReportsModule } from './modules/internal-reports/internal-reports.module';
 import { hasApiRoutePrefix } from './common/http/api-route';
 import { ExecutionContext, Module } from '@nestjs/common';
@@ -42,6 +43,7 @@ function isInternalHttpPath(context: ExecutionContext): boolean {
   imports: [
     AnalyticsModule,
     ContactModule,
+    LegalModule,
     InternalReportsModule,
     ConfigModule.forRoot({
       isGlobal: true,

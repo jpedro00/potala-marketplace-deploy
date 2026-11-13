@@ -68,6 +68,9 @@ export class OrdersController {
     private readonly favoritesService: FavoritesService,
   ) {}
 
+  @Post('shipping-quote')
+  quoteShipping(@Body() dto: CreateCheckoutDto) { return this.ordersService.quoteShipping(dto); }
+
   @Post('checkout')
   @ApiOperation({
     summary:

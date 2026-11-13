@@ -28,6 +28,7 @@ export interface ResolvedProductVariant {
   sellerId: string;
   productStatus: ProductStatus;
   productTitle: string;
+  itemType?: string;
   sku: string;
   variantName: string;
   unitPriceCents: number;

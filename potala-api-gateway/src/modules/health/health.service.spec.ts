@@ -41,6 +41,19 @@ describe('HealthService', () => {
       { name: 'orders-service', status: 'up' },
     ]);
   });
+  it('coalesces concurrent readiness probes and expires cached health after one second', async () => {
+    const time=jest.spyOn(Date,'now').mockReturnValue(1000);
+    global.fetch=jest.fn().mockResolvedValue({ok:true}) as typeof fetch;
+    const service=new HealthService(createConfigMock() as never);
+    const results=await Promise.all(Array.from({length:20},()=>service.readiness()));
+    expect(results.every(row=>row.status==='ok')).toBe(true);
+    expect(global.fetch).toHaveBeenCalledTimes(4);
+    await service.readiness();expect(global.fetch).toHaveBeenCalledTimes(4);
+    time.mockReturnValue(2001);
+    (global.fetch as jest.Mock).mockResolvedValue({ok:false});
+    expect((await service.readiness()).status).toBe('degraded');
+    expect(global.fetch).toHaveBeenCalledTimes(8);
+  });
 
   it('reports degraded when one upstream is down', async () => {
     global.fetch = jest

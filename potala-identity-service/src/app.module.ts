@@ -21,6 +21,8 @@ import { InternalModule } from './modules/internal/internal.module';
 import { HealthModule } from './modules/health/health.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { InternalReportsModule } from './modules/internal-reports/internal-reports.module';
+import { RecoveryModule } from './modules/auth/recovery.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 function requestPath(context: ExecutionContext): string {
   const request = context.switchToHttp().getRequest<{ originalUrl?: string }>();
@@ -37,6 +39,8 @@ function isInternalHttpPath(context: ExecutionContext): boolean {
 
 @Module({
   imports: [
+    RecoveryModule,
+    NotificationsModule,
     InternalReportsModule,
     ConfigModule.forRoot({
       isGlobal: true,

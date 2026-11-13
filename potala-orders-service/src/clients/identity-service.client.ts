@@ -13,6 +13,11 @@ import { INTERNAL_API_KEY_HEADER } from '../common/constants/auth.constants';
  */
 @Injectable()
 export class IdentityServiceClient {
+  async enqueueNotification(userId: string, template: string, idempotencyKey: string) {
+    const {baseUrl, apiKey, timeoutMs} = this.configService.get('identityService', {infer: true});
+    const response = await fetch(`${baseUrl}/api/v1/internal/notifications`, {method: 'POST', headers: {'content-type': 'application/json', [INTERNAL_API_KEY_HEADER]: apiKey}, body: JSON.stringify({userId, template, idempotencyKey}), signal: AbortSignal.timeout(timeoutMs)});
+    if (!response.ok) throw new ServiceUnavailableException('Notification inbox enqueue unavailable');
+  }
   private readonly logger = new Logger(IdentityServiceClient.name);
 
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}

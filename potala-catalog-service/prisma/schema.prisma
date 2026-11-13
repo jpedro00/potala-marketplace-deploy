@@ -75,6 +75,8 @@ model Product {
   priceCents  Int           @map("preco_centavos")
   status      ProductStatus @default(DRAFT)
   featured    Boolean       @default(false) @map("destaque")
+  itemType ProductItemType @default(PHYSICAL)
+  attributes Json @default("{}")
   createdAt   DateTime      @default(now()) @map("criado_em")
   updatedAt   DateTime      @updatedAt @map("atualizado_em")
 
@@ -95,6 +97,36 @@ model Product {
   @@index([status])
   @@index([createdAt])
   @@map("produtos")
+  @@schema("catalog")
+}
+
+enum ProductItemType {
+  PHYSICAL
+  DIGITAL
+  SERVICE
+  COURSE
+  @@schema("catalog")
+}
+
+enum ProductAttributeKind {
+  TEXT
+  NUMBER
+  BOOLEAN
+  CHOICE
+  @@schema("catalog")
+}
+
+model ProductAttributeDefinition {
+  id String @id @default(uuid()) @db.Uuid
+  itemType ProductItemType
+  key String @db.VarChar(40)
+  label String @db.VarChar(80)
+  kind ProductAttributeKind
+  options Json @default("[]")
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([itemType,key])
   @@schema("catalog")
 }
 
@@ -370,5 +402,35 @@ model ContactAction {
   createdAt DateTime @default(now())
   contact ContactSubmission @relation(fields:[contactId], references:[id])
   @@index([contactId,createdAt])
+  @@schema("catalog")
+}
+
+model LegalPolicy {
+  id String @id @default(uuid()) @db.Uuid
+  key String @db.VarChar(40)
+  version Int
+  title String @db.VarChar(200)
+  content String
+  contentHash String @db.VarChar(64)
+  status String @default("DRAFT") @db.VarChar(12)
+  createdBy String @db.Uuid
+  reviewedBy String? @db.Uuid
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  acceptances LegalAcceptance[]
+  @@unique([key,version])
+  @@index([key,status])
+  @@schema("catalog")
+}
+
+model LegalAcceptance {
+  id String @id @default(uuid()) @db.Uuid
+  policyId String @db.Uuid
+  userId String @db.Uuid
+  contentHash String @db.VarChar(64)
+  acceptedAt DateTime @default(now())
+  policy LegalPolicy @relation(fields:[policyId],references:[id],onDelete:Restrict)
+  @@unique([policyId,userId])
+  @@index([userId,acceptedAt])
   @@schema("catalog")
 }

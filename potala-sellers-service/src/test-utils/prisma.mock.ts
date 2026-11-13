@@ -22,6 +22,9 @@ export type PrismaMock = {
 
 export function createPrismaMock(): PrismaMock & PrismaService {
   const tx = {
+    $queryRaw: jest.fn(),
+    partnerDocumentType: {findMany:jest.fn().mockResolvedValue([])},
+    partnerDocument: {findFirst:jest.fn()},
     seller: {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn(),
@@ -30,6 +33,7 @@ export function createPrismaMock(): PrismaMock & PrismaService {
       update: jest.fn(),
     },
     sellerMembership: {
+      findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
       create: jest.fn(),
     },

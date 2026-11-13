@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { OrderNotificationDispatcher } from './order-notification-dispatcher';
+import { AdminFiscalController, CustomerFiscalController, SellerFiscalController, FiscalAttachmentsService } from './fiscal-attachments.controller';
 import { OrdersController } from './orders.controller';
 import { CheckoutIdempotencyService } from './checkout-idempotency.service';
 import { OrderTransitionsService } from './order-transitions.service';
@@ -63,6 +65,7 @@ import { ActivityPaymentsController } from './activity-payments.controller';
 @Module({
   imports: [PaymentsModule],
   controllers: [
+    AdminFiscalController, CustomerFiscalController, SellerFiscalController,
     ActivityPaymentsController,
     CustomerClaimsController,
     OrdersController,
@@ -80,6 +83,8 @@ import { ActivityPaymentsController } from './activity-payments.controller';
     AdminDisputesController,
   ],
   providers: [
+    OrderNotificationDispatcher,
+    FiscalAttachmentsService,
     OrdersService,
     CheckoutIdempotencyService,
     OrderTransitionsService,

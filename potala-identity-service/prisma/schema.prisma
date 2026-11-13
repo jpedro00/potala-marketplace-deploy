@@ -52,10 +52,47 @@ model User {
   customerProfile CustomerProfile?
   adminProfile    AdminProfile?
   accessGrants    AdminAccessGrant[]
+  actionTokens    AccountActionToken[]
+  notifications   Notification[]
 
   @@index([status])
   @@index([createdAt])
   @@map("usuarios")
+  @@schema("identity")
+}
+
+model AccountActionToken {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  purpose String
+  tokenHash String @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, purpose])
+  @@schema("identity")
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  idempotencyKey String @unique
+  template String
+  title String
+  message String
+  encryptedPayload String?
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedUntil DateTime?
+  providerMessageId String?
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  sentAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
   @@schema("identity")
 }
 

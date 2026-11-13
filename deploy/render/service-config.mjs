@@ -3,7 +3,7 @@ import { join } from 'node:path';
 const domains = ['identity', 'sellers', 'catalog', 'orders'];
 const ports = { identity: 3001, sellers: 3002, catalog: 3003, orders: 3004 };
 const dependencies = {
-  identity: ['sellers'], sellers: ['identity'],
+  identity: ['sellers'], sellers: ['identity', 'catalog'],
   catalog: ['identity', 'sellers'], orders: ['identity', 'sellers', 'catalog'],
 };
 const tuning = [
@@ -74,10 +74,18 @@ export function createServices(env, root) {
     if (name === 'identity') {
       childEnv.SESSION_COOKIE_SECURE = env.SESSION_COOKIE_SECURE ?? 'true';
       childEnv.SESSION_TTL_DAYS = env.SESSION_TTL_DAYS ?? '7';
+      childEnv.ACCOUNT_ACTION_ORIGIN = env.IDENTITY_ACCOUNT_ACTION_ORIGIN ?? frontend;
+      for (const key of ['NOTIFICATION_ENCRYPTION_KEY','BREVO_API_KEY','BREVO_SENDER_EMAIL','REQUIRE_EMAIL_CONFIRMATION','NOTIFICATION_DISPATCH_ENABLED']) {
+        if (env[`IDENTITY_${key}`] !== undefined) childEnv[key] = env[`IDENTITY_${key}`];
+      }
+    }
+    if (name === 'sellers' && env.SELLERS_SELLER_NOTIFICATION_DISPATCH_ENABLED !== undefined) {
+      childEnv.SELLER_NOTIFICATION_DISPATCH_ENABLED = env.SELLERS_SELLER_NOTIFICATION_DISPATCH_ENABLED;
     }
     if (name === 'orders') {
       childEnv.PERMISSION_SHADOW_MODE = env.ORDERS_PERMISSION_SHADOW_MODE ?? 'false';
       childEnv.PAYMENT_GATEWAY_MODE = env.ORDERS_PAYMENT_GATEWAY_MODE ?? 'unavailable';
+      if (env.ORDERS_ORDER_NOTIFICATION_WORKER_ENABLED !== undefined) childEnv.ORDER_NOTIFICATION_WORKER_ENABLED = env.ORDERS_ORDER_NOTIFICATION_WORKER_ENABLED;
     }
     return { name, command: process.execPath, args: ['dist/main.js'], cwd: join(root, `potala-${name}-service`), env: childEnv };
   });

@@ -142,6 +142,7 @@ export class CheckoutIdempotencyService {
       ],
       couponCode: dto.couponCode ? dto.couponCode.trim().toUpperCase() : null,
       paymentMethod: dto.paymentMethod ?? 'PIX',
+      deliveryChoices: (dto.deliveryChoices ?? []).map(c => [c.sellerId.toLowerCase(), c.method]).sort((a, b) => a[0].localeCompare(b[0])),
     };
     return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
   }

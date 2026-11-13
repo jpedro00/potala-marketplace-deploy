@@ -13,6 +13,8 @@ export type ReadinessResult = {
 
 @Injectable()
 export class HealthService {
+  private inFlight?:Promise<ReadinessResult>;
+  private cached?:{expiresAt:number;result:ReadinessResult};
   constructor(private readonly configService: ConfigService<AppConfig, true>) {}
 
   /**
@@ -26,6 +28,14 @@ export class HealthService {
   }
 
   async readiness(): Promise<ReadinessResult> {
+    if(this.cached&&Date.now()<this.cached.expiresAt)return this.cached.result;
+    if(this.inFlight)return this.inFlight;
+    const pending=this.probeAll().then(result=>{this.cached={expiresAt:Date.now()+1000,result};return result;});
+    this.inFlight=pending;
+    try{return await pending;}finally{if(this.inFlight===pending)this.inFlight=undefined;}
+  }
+
+  private async probeAll(): Promise<ReadinessResult> {
     const identityServiceUrl = this.configService.get('identityServiceUrl', {
       infer: true,
     });

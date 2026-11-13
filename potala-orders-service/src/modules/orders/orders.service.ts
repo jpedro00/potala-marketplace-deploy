@@ -8,6 +8,8 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { quoteSeller, ShippingQuote } from './shipping';
+import { allocateCents } from '../payments/financial-split';
 import { FinanceService } from '../payments/finance.service';
 import { SellersServiceClient } from '../../clients/sellers-service.client';
 import type { ActivityPaymentDto } from './activity-payments.controller';
@@ -54,6 +56,7 @@ import {
 } from './order-transitions.service';
 
 type ValidatedItem = {
+  itemType?: string;
   categoryId?: string;
   productId: string;
   variantId: string;
@@ -66,7 +69,8 @@ type ValidatedItem = {
 };
 
 type SellerGroup = {
-  financial?: Awaited<ReturnType<FinanceService['quote']>>[number];
+  shipping?: ShippingQuote;
+  financial?: Omit<Awaited<ReturnType<FinanceService['quote']>>[number], 'financialSnapshot'> & {financialSnapshot: Prisma.InputJsonObject};
   sellerId: string;
   items: ValidatedItem[];
   subtotalCents: number;
@@ -508,6 +512,38 @@ export class OrdersService {
     return this.checkoutIdempotent(customerId, dto, key);
   }
 
+  async quoteShipping(dto: CreateCheckoutDto) {
+    const groups = this.groupBySeller(await this.resolveAndValidateItems(dto.items));
+    if (!this.sellersServiceClient) throw new ServiceUnavailableException('Seller delivery service unavailable');
+    const stores = await Promise.all(groups.map(async group => {
+      const options: ShippingQuote[] = [];
+      if (!group.items.some(i => (i.itemType ?? 'PHYSICAL') === 'PHYSICAL')) options.push({sellerId: group.sellerId, method: 'NONE', priceCents: 0, estimatedDays: 0, revision: 0, basis: 'NON_PHYSICAL'});
+      else {
+        const settings = await this.sellersServiceClient.getDeliverySettings(group.sellerId);
+        for (const method of ['DELIVERY', 'PICKUP'] as const) {
+          try { options.push(quoteSeller(settings, method, dto.shippingAddress)); } catch (error) { if (!(error instanceof BadRequestException)) throw error; }
+        }
+      }
+      const method = dto.deliveryChoices?.find(c => c.sellerId === group.sellerId)?.method;
+      return {sellerId: group.sellerId, options, selected: options.find(o => o.method === method) ?? options[0] ?? null};
+    }));
+    const subtotalCents = this.sum(groups.map(g => g.subtotalCents));
+    const shippingCents = this.sum(stores.map(s => s.selected?.priceCents ?? 0));
+    const discountCents = dto.couponCode ? (await this.couponsService.resolveForCheckout(dto.couponCode, subtotalCents, shippingCents)).discountCents : 0;
+    return {stores, subtotalCents, shippingCents, discountCents, totalCents: this.sum([subtotalCents, shippingCents]) - discountCents, available: stores.every(s => !!s.selected), carrierAvailable: false};
+  }
+
+  private async shippingQuotes(groups: SellerGroup[], dto: CreateCheckoutDto): Promise<ShippingQuote[]> {
+    const choices = dto.deliveryChoices ?? [];
+    if (new Set(choices.map(c => c.sellerId)).size !== choices.length || choices.some(c => !groups.some(g => g.sellerId === c.sellerId))) throw new BadRequestException('Invalid or duplicate store delivery choice');
+    return Promise.all(groups.map(async group => {
+      if (!group.items.some(i => (i.itemType ?? 'PHYSICAL') === 'PHYSICAL')) return {sellerId: group.sellerId, method: 'NONE', priceCents: 0, estimatedDays: 0, revision: 0, basis: 'NON_PHYSICAL'};
+      if (!this.sellersServiceClient) throw new ServiceUnavailableException('Seller delivery service unavailable');
+      const settings = await this.sellersServiceClient.getDeliverySettings(group.sellerId);
+      return quoteSeller(settings, choices.find(c => c.sellerId === group.sellerId)?.method ?? 'DELIVERY', dto.shippingAddress);
+    }));
+  }
+
   private async runCheckout(
     customerId: string,
     dto: CreateCheckoutDto,
@@ -521,21 +557,31 @@ export class OrdersService {
     // retry de número de pedido -- mesma razão de subtotalCents ser
     // calculado aqui fora: a janela de validade de um cupom não muda entre
     // milissegundos de retry.
-    const shippingCents = 0;
+    const quotes = await this.shippingQuotes(sellerGroups, dto);
+    sellerGroups.forEach((group, i) => { group.shipping = quotes[i]; });
+    const shippingCents = this.sum(quotes.map(q => q.priceCents));
     let couponId: string | null = null;
     let discountCents = 0;
+    let shippingDiscountCents = 0;
     if (dto.couponCode) {
       const resolved = await this.couponsService.resolveForCheckout(
         dto.couponCode,
         subtotalCents,
+        shippingCents,
       );
       couponId = resolved.couponId;
       discountCents = resolved.discountCents;
+      shippingDiscountCents = resolved.shippingDiscountCents ?? 0;
     }
     const totalCents = this.sum([subtotalCents, shippingCents]) - discountCents;
     if (totalCents <= 0) throw new BadRequestException('A payable order must have a positive total');
-    const financial = await this.finance.quote(sellerGroups, discountCents);
-    sellerGroups.forEach((group, i) => { group.financial = financial[i]; });
+    const financial = await this.finance.quote(sellerGroups, discountCents - shippingDiscountCents);
+    const shippingDiscounts = allocateCents(shippingDiscountCents, quotes.map(q => q.priceCents));
+    sellerGroups.forEach((group, i) => {
+      const netShipping = quotes[i].priceCents - shippingDiscounts[i];
+      group.financial = {...financial[i], discountCents: financial[i].discountCents + shippingDiscounts[i], sellerNetCents: financial[i].sellerNetCents + netShipping,
+        financialSnapshot: {...financial[i].financialSnapshot, shippingFeeBasis: 'EXCLUDED_FROM_ITEM_FEES', shippingGrossCents: quotes[i].priceCents, shippingDiscountCents: shippingDiscounts[i], shippingPayableCents: netShipping}};
+    });
     const paymentMethod = dto.paymentMethod ?? 'PIX';
     const recipientRefs = new Map<string, string>();
     if (this.sellersServiceClient) {
@@ -866,6 +912,7 @@ export class OrdersService {
         quantity: item.quantity,
         sellerId: variant.sellerId,
         productTitle: variant.productTitle,
+        itemType: variant.itemType ?? 'PHYSICAL',
         sku: variant.sku,
         unitPriceCents: variant.unitPriceCents,
         lineTotalCents: this.multiply(variant.unitPriceCents, item.quantity),
@@ -1008,7 +1055,8 @@ export class OrdersService {
           status: SellerOrderStatus.PENDING,
           subtotalCents: group.subtotalCents,
           // v1 computes neither per-seller shipping nor commission. See README.md.
-          shippingCents: 0,
+          shippingCents: group.shipping?.priceCents ?? 0,
+          shippingSnapshot: group.shipping ? {...group.shipping} : undefined,
           commissionCents: group.financial!.commissionCents,
           sellerNetCents: group.financial!.sellerNetCents,
           gatewayFeeCents: group.financial!.gatewayFeeCents,

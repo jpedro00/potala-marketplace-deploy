@@ -116,6 +116,8 @@ export class ShippingAddressDto {
 }
 
 export class CreateCheckoutDto {
+  @IsOptional() @ArrayMaxSize(100) @ValidateNested({each: true}) @Type(() => DeliveryChoiceDto)
+  deliveryChoices?: DeliveryChoiceDto[];
   @IsOptional() @IsBoolean() analyticsConsent?: boolean;
   @IsOptional() @IsUUID('4') analyticsSessionId?: string;
   @IsOptional() @IsIn(['PIX', 'CARD']) paymentMethod?: 'PIX' | 'CARD';
@@ -146,4 +148,9 @@ export class CreateCheckoutDto {
   @IsString()
   @MaxLength(30)
   couponCode?: string;
+}
+
+export class DeliveryChoiceDto {
+  @IsUUID('4') sellerId!: string;
+  @IsIn(['PICKUP', 'DELIVERY', 'CARRIER']) method!: 'PICKUP' | 'DELIVERY' | 'CARRIER';
 }

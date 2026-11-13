@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { sellerDeliveryMock } from '../../test-utils/seller-delivery.mock';
 import { Prisma } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { CheckoutIdempotencyService } from './checkout-idempotency.service';
@@ -65,6 +66,7 @@ function setUpHappyPath() {
   const catalogServiceClient = createCatalogServiceClientMock();
   const paymentGateway = createPaymentGatewayClientMock();
   const couponsService = createCouponsServiceMock();
+  const sellers = sellerDeliveryMock();
 
   catalogServiceClient.resolveVariants.mockResolvedValue([resolvedVariant()]);
   catalogServiceClient.reserveInventory.mockResolvedValue(undefined);
@@ -99,9 +101,10 @@ function setUpHappyPath() {
     paymentGateway as never,
     couponsService as never,
     new CheckoutIdempotencyService(prisma as never),
+    undefined, undefined, sellers as never,
   );
 
-  return { service, prisma, catalogServiceClient, paymentGateway, couponsService };
+  return { service, prisma, catalogServiceClient, paymentGateway, couponsService, sellers };
 }
 
 function uniqueOrderNumberViolation() {
@@ -649,5 +652,44 @@ describe('OrdersService', () => {
         expect(prisma.orderStatusHistory.create).not.toHaveBeenCalled();
       });
     }
+  });
+});
+
+describe('Shipping totals at authoritative checkout', () => {
+  it.each([{discount: 0, shippingDiscount: 0}, {discount: 777, shippingDiscount: 0}, {discount: 1500, shippingDiscount: 1500}])('reconciles two sellers and freight with coupon %j', async ({discount, shippingDiscount}) => {
+    const {service, prisma, catalogServiceClient, paymentGateway, couponsService, sellers} = setUpHappyPath();
+    catalogServiceClient.resolveVariants.mockResolvedValue([resolvedVariant(), resolvedVariant({productId: PRODUCT_B, variantId: VARIANT_B, sellerId: SELLER_B, unitPriceCents: 3000})]);
+    sellers.getDeliverySettings.mockImplementation(async (sellerId: string) => ({sellerId, pickupEnabled: false, pickupAddress: null, deliveryEnabled: true, revision: 4, rates: [{state: 'SP', priceCents: sellerId === SELLER_A ? 1000 : 500, estimatedDays: 2}]}));
+    prisma.financialPolicy.findMany.mockResolvedValue([{id: 'policy', scope: 'PLATFORM', version: 1, commissionBps: 500, gatewayFeeBps: 100, fixedFeeCents: 5}]);
+    couponsService.resolveForCheckout.mockResolvedValue({couponId: 'coupon', discountCents: discount, shippingDiscountCents: shippingDiscount});
+    await service.checkout(CUSTOMER_ID, checkoutDto({items: [{productId: PRODUCT_A, variantId: VARIANT_A, quantity: 2}, {productId: PRODUCT_B, variantId: VARIANT_B, quantity: 1}], couponCode: discount ? 'COUPON' : undefined}));
+    const rows = prisma.sellerOrder.create.mock.calls.map(([call]) => call.data);
+    expect(rows.reduce((s, row) => s + row.shippingCents, 0)).toBe(1500);
+    expect(rows.reduce((s, row) => s + row.discountCents, 0)).toBe(discount);
+    expect(rows.reduce((s, row) => s + row.sellerNetCents + row.commissionCents + row.gatewayFeeCents, 0)).toBe(6500 - discount);
+    expect(rows.every(row => row.shippingSnapshot.revision === 4 && row.financialSnapshot.fixedFeeBasis === 'PER_ORDER_LINE' && row.financialSnapshot.shippingFeeBasis === 'EXCLUDED_FROM_ITEM_FEES')).toBe(true);
+    const charge = paymentGateway.charge.mock.calls[0][0];
+    expect(charge.amountCents).toBe(6500 - discount);
+    expect(charge.splits.reduce((s: number, row: {amountCents: number}) => s + row.amountCents, 0) + charge.platformAmountCents).toBe(charge.amountCents);
+  });
+  it('rejects unavailable settings, duplicate choices, and unknown seller choices before any charge', async () => {
+    const {service, prisma, sellers} = setUpHappyPath();
+    sellers.getDeliverySettings.mockResolvedValue({sellerId: SELLER_A, pickupEnabled: false, pickupAddress: null, deliveryEnabled: false, revision: 0, rates: []});
+    await expect(service.checkout(CUSTOMER_ID, checkoutDto())).rejects.toThrow('not configured');
+    await expect(service.checkout(CUSTOMER_ID, checkoutDto({deliveryChoices: [{sellerId: SELLER_A, method: 'PICKUP'}, {sellerId: SELLER_A, method: 'DELIVERY'}]}))).rejects.toThrow('duplicate');
+    await expect(service.checkout(CUSTOMER_ID, checkoutDto({deliveryChoices: [{sellerId: SELLER_B, method: 'PICKUP'}]}))).rejects.toThrow('Invalid');
+    expect(prisma.order.create).not.toHaveBeenCalled();
+  });
+  it('charges no physical shipping for a digital product', async () => {
+    const {service, catalogServiceClient, sellers, prisma} = setUpHappyPath();
+    catalogServiceClient.resolveVariants.mockResolvedValue([resolvedVariant({itemType: 'DIGITAL'})]);
+    await service.checkout(CUSTOMER_ID, checkoutDto());
+    expect(sellers.getDeliverySettings).not.toHaveBeenCalled();
+    expect(prisma.sellerOrder.create.mock.calls[0][0].data.shippingSnapshot).toMatchObject({method: 'NONE', priceCents: 0});
+  });
+  it('includes delivery choice in idempotency fingerprint', () => {
+    const {prisma} = setUpHappyPath();
+    const idempotency = new CheckoutIdempotencyService(prisma as never);
+    expect(idempotency.fingerprint(checkoutDto({deliveryChoices: [{sellerId: SELLER_A, method: 'PICKUP'}]}))).not.toBe(idempotency.fingerprint(checkoutDto({deliveryChoices: [{sellerId: SELLER_A, method: 'DELIVERY'}]})));
   });
 });

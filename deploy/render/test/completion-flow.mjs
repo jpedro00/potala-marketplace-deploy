@@ -27,6 +27,7 @@ const base = 'http://127.0.0.1:18080/api/v1';
 const env = {
   PATH: process.env.PATH, SystemRoot: process.env.SystemRoot,
   NODE_ENV: 'test', ORDERS_PAYMENT_GATEWAY_MODE: 'mock', FRONTEND_URL: origin, PORT: '18080', SESSION_COOKIE_SECURE: 'false',
+  SELLERS_SELLER_NOTIFICATION_DISPATCH_ENABLED: 'true', ORDERS_ORDER_NOTIFICATION_WORKER_ENABLED: 'true',
 };
 for (const name of ['identity', 'sellers', 'catalog', 'orders']) {
   const prefix = name.toUpperCase();
@@ -97,6 +98,7 @@ try {
     await call(`/admin/sellers/${registered.seller.sellerId}/approve`, { method: 'PATCH', data: {}, cookie: admin });
     const cookie = (await call('/auth/login', { method: 'POST', data: { email, password } })).cookie;
     await call('/seller/settings/payments', {method:'PATCH',cookie,data:{acceptPix:true,acceptCard:true}});
+    await call('/seller/settings/delivery', {method:'PUT',cookie,data:{pickupEnabled:true,pickupAddress:'Endereço fictício do teste local',deliveryEnabled:true,rates:[{state:'SP',priceCents:0,estimatedDays:2}]}});
     sellers.push({ id: registered.seller.sellerId, cookie });
     const product = (await call('/seller/products', { method: 'POST', expected: 201, cookie, data: {
       title: `Produto ${number} ${suffix}`, categoryId: category.id, priceCents: 1000,
@@ -106,6 +108,12 @@ try {
     products.push(product);
   }
   await call('/public/products');
+  await call('/admin/product-attributes',{method:'PUT',cookie:admin,data:{itemType:'PHYSICAL',key:'smoke_size',label:'Tamanho',kind:'TEXT',active:true}});
+  await call(`/seller/products/${products[0].id}/details`,{method:'PATCH',cookie:sellers[0].cookie,data:{itemType:'PHYSICAL',attributes:{smoke_size:suffix},title:products[0].title,description:'Descrição local',priceCents:1000}});
+  await call(`/seller/products/${products[0].id}/details`,{method:'PATCH',cookie:sellers[1].cookie,expected:404,data:{itemType:'PHYSICAL',attributes:{},title:'Indevido',description:'',priceCents:1}});
+  const filtered=(await call(`/public/products?itemType=PHYSICAL&attributes=${encodeURIComponent(JSON.stringify({smoke_size:suffix}))}`)).data;
+  assert.ok(JSON.stringify(filtered).includes(products[0].id));
+  assert.equal((await call('/legal/policies/TERMS')).data.key,'TERMS');
   const buyerEmail = `buyer-${suffix}@example.test`;
   await call('/auth/customer/register', { method: 'POST', expected: 201, data: { email: buyerEmail, password, name: 'Comprador teste' } });
   const buyer = (await call('/auth/login', { method: 'POST', data: { email: buyerEmail, password } })).cookie;
@@ -126,6 +134,16 @@ try {
     await call(`/seller/orders/${own.id}`, { cookie: seller.cookie });
     await call(`/seller/orders/${other.id}`, { cookie: seller.cookie, expected: 404 });
   }
+  const ownOrder=order.sellerOrders.find(row=>row.sellerId===sellers[0].id);
+  const fiscal=(await call(`/seller/orders/${ownOrder.id}/fiscal-attachments`,{method:'POST',expected:201,cookie:sellers[0].cookie,data:{fileName:'prova-local.xml',mediaType:'application/xml',base64:Buffer.from('<prova>Somente teste local</prova>').toString('base64')}})).data;
+  await call(`/seller/orders/${ownOrder.id}/fiscal-attachments/${fiscal.id}`,{cookie:sellers[1].cookie,expected:404});
+  const fiscalDownload=await fetch(`${base}/orders/seller-orders/${ownOrder.id}/fiscal-attachments/${fiscal.id}`,{headers:{origin,cookie:buyer}});
+  assert.equal(fiscalDownload.status,200);assert.match(await fiscalDownload.text(),/Somente teste local/);
+  let inbox=[];
+  for(let attempt=0;attempt<30;attempt++) {inbox=(await call('/notifications',{cookie:buyer})).data;if(inbox.some(row=>row.template==='ORDER_CREATED'||row.title==='Pedido recebido'))break;await delay(1000);}
+  assert.ok(inbox.some(row=>row.template==='ORDER_CREATED'||row.title==='Pedido recebido'),'Order event must reach the customer inbox');
+  await call(`/notifications/${inbox[0].id}/read`,{method:'PATCH',cookie:sellers[1].cookie});
+  assert.equal((await call('/notifications',{cookie:buyer})).data.find(row=>row.id===inbox[0].id).readAt,null);
   for (let i = 0; i < products.length; i++) {
     const product = (await call(`/seller/products/${products[i].id}`, { cookie: sellers[i].cookie })).data;
     assert.equal(product.variants[0].inventory.quantity, 2);
@@ -180,7 +198,7 @@ try {
   console.log('PASS: contract reports, contacts persisted/idempotent/admin-only, server-confirmed contact analytics, structured course details and downloads.');
   await mkdir(join(root,'artifacts'),{recursive:true});
   await writeFile(join(root,'artifacts/completion-flow.log'),logs.join('\n'));
-  await writeFile(join(root,'artifacts/closure-final-smoke.json'),JSON.stringify({passed:true,checkedAt:new Date().toISOString(),target:base,checks:['five services ready','auth and logout','seller isolation','two seller mock checkout','split cents and idempotency','stock once','CSV and XLSX readback','all contract report origins','structured course enrollment and download','contact idempotency and admin authorization','server-confirmed contact analytics','internal routes blocked']},null,2));
+  await writeFile(join(root,'artifacts/closure-final-smoke.json'),JSON.stringify({passed:true,checkedAt:new Date().toISOString(),target:base,checks:['five services ready','auth and logout','seller isolation','two seller mock checkout','split cents and idempotency','explicit seller delivery configuration','typed attributes and public filters','private fiscal upload and customer download with seller IDOR denial','durable order event reaches owner-scoped inbox','stock once','CSV and XLSX readback','all contract report origins','structured course enrollment and download','contact idempotency and admin authorization','server-confirmed contact analytics','internal routes blocked']},null,2));
   if(process.env.KEEP_LOCAL_RUNTIME==='1') {
     console.log('Local runtime ready at 127.0.0.1:18080; stop with Ctrl+C.');
     await new Promise(resolve=>process.once('SIGINT',resolve));

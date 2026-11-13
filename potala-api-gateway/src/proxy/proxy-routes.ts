@@ -55,6 +55,13 @@ export function buildProxyRoutes({
   ordersServiceUrl,
 }: ProxyRouteTargets): ProxyRoute[] {
   return [
+    { mountPath: '/api/v1/notifications', serviceName: 'identity-service', targetBaseUrl: `${identityServiceUrl}/api/v1/notifications` },
+    { mountPath: '/api/v1/legal', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/legal` },
+    { mountPath: '/api/v1/admin/legal', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/admin/legal` },
+    { mountPath: '/api/v1/admin/partner-document-types', serviceName: 'sellers-service', targetBaseUrl: `${sellersServiceUrl}/api/v1/admin/partner-document-types` },
+    { mountPath: '/api/v1/admin/partner-documents', serviceName: 'sellers-service', targetBaseUrl: `${sellersServiceUrl}/api/v1/admin/partner-documents` },
+    { mountPath: '/api/v1/public/product-attributes', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/public/product-attributes` },
+    { mountPath: '/api/v1/admin/product-attributes', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/admin/product-attributes` },
     { mountPath: '/api/v1/public/contact', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/public/contact` },
     { mountPath: '/api/v1/admin/contacts', serviceName: 'catalog-service', targetBaseUrl: `${catalogServiceUrl}/api/v1/admin/contacts` },
     { mountPath: '/api/v1/admin/access', serviceName: 'identity-service', targetBaseUrl: `${identityServiceUrl}/api/v1/admin/access` },
