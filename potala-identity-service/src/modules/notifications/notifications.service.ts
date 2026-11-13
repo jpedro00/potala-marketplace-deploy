@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
@@ -11,8 +12,18 @@ import {
   NotificationTemplate,
 } from './notification-templates';
 
+class DeliveryFailure extends Error {
+  constructor(
+    readonly reason: string,
+    readonly status?: number,
+  ) {
+    super(reason);
+  }
+}
+
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   private key() {
@@ -209,10 +220,33 @@ export class NotificationsService {
             headers: { IdempotencyKey: row.id },
           }),
         });
-        if (!response.ok) throw new Error('Transport rejected');
+        if (!response.ok) {
+          let message = '';
+          try {
+            const body = (await response.json()) as { message?: unknown };
+            if (typeof body.message === 'string')
+              message = body.message.slice(0, 2000);
+          } catch {
+            /* Provider bodies are never logged or retained. */
+          }
+          const reason =
+            response.status === 401 &&
+            /ip address|unrecogni|whitelist|white.list|allow.list/i.test(
+              message,
+            )
+              ? 'BREVO_IP_NOT_AUTHORIZED'
+              : response.status === 401
+                ? 'BREVO_AUTH_REJECTED'
+                : response.status === 403
+                  ? 'BREVO_ACCESS_DENIED'
+                  : response.status === 429
+                    ? 'BREVO_RATE_LIMIT'
+                    : 'BREVO_REQUEST_REJECTED';
+          throw new DeliveryFailure(reason, response.status);
+        }
         const result = (await response.json()) as { messageId?: string };
         if (!result.messageId)
-          throw new Error('Transport acknowledgement missing');
+          throw new DeliveryFailure('BREVO_ACKNOWLEDGEMENT_MISSING');
         await this.prisma.notification.update({
           where: { id: row.id },
           data: {
@@ -223,9 +257,23 @@ export class NotificationsService {
             lockedUntil: null,
           },
         });
-      } catch {
+      } catch (error) {
         // Never persist provider error bodies or links: both can contain secrets.
         const exhausted = row.attempts + 1 >= 5;
+        this.logger.error(
+          JSON.stringify({
+            event: 'brevo_send_failed',
+            reason:
+              error instanceof DeliveryFailure
+                ? error.reason
+                : 'NOTIFICATION_PROCESSING_FAILED',
+            ...(error instanceof DeliveryFailure && error.status
+              ? { status: error.status }
+              : {}),
+            attempt: row.attempts + 1,
+            retry: !exhausted,
+          }),
+        );
         await this.prisma.notification.update({
           where: { id: row.id },
           data: {

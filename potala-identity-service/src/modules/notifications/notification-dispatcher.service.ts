@@ -25,6 +25,7 @@ export class NotificationDispatcher implements OnModuleInit, OnModuleDestroy {
       void this.tick();
     }, 10000);
     this.timer.unref();
+    this.logger.log('Brevo notification worker enabled; interval=10s');
   }
 
   private async tick() {
