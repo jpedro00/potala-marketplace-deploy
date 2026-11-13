@@ -45,3 +45,18 @@ O ensaio usou Node 22.22.0, Windows e PostgreSQL 17 local. O cluster exclusivo e
 ## Retorno
 
 Seguir `ROLLBACK.md`. O código pode ser recuperado agora pela tag exata e pelos bundles. O retorno operacional precisa do registro dos destinos originais e de ensaio com a infraestrutura. A implantação conjunta só deve receber tráfego real após concluir esses gates.
+
+## Revalidação de 09/11/2026
+
+- Repetido o ensaio Linux com PostgreSQL descartável. Passaram inicialização dos cinco processos, login, cadastro, aprovação de lojas, produtos, checkout mock com duas lojas, idempotência, estoque, isolamento dos pedidos e logout. Log local em artifacts/linux-revalidation-20261109.log. Recursos descartáveis removidos.
+- API publicada respondeu HTTP 200 para readiness e produtos e HTTP 401 para /auth/me sem sessão.
+- Executados dez testes públicos existentes com Chrome headless no computador contra o frontend publicado, em desktop e celular. Oito passaram na primeira execução. A página inicial excedeu 30 segundos nas duas dimensões, mas passou na repetição com prazo maior (41,3 s desktop e 51,1 s celular). Verificação adicional confirmou renderização e ausência de overflow horizontal. Logs em artifacts/public-browser.log e artifacts/public-browser-home-retry.log.
+- Credenciais E2E de cliente, vendedor e administrador não estavam configuradas. Login real no navegador e compra no ambiente publicado permanecem sem validação autenticada. O checkout foi validado no banco descartável com pagamento mock.
+- A instalação completa das dependências do frontend foi interrompida após a cobertura pública terminar, devido à demora nos downloads. Não foi executado novo build local completo. O código-fonte do frontend permaneceu sem alterações.
+
+## Teste após suspensão informada dos serviços antigos
+
+- Dez testes de navegação pública passaram em Chrome desktop e celular. A página inicial carregou em 47–55 segundos.
+- A primeira chamada da API Render respondeu 503, com três upstreams indisponíveis. Na repetição, readiness e categorias responderam 200 e os quatro upstreams estavam disponíveis. /auth/me sem sessão respondeu 401.
+- Um teste de login no navegador com usuário sintético inexistente identificou que o frontend publicado ainda chama https://potala-api-gateway.vercel.app/api/v1/auth/login, que respondeu 401. A alteração para a API Render ainda não está incorporada nesse frontend publicado. A navegação pública aprovada não comprova a conclusão da troca de backend.
+- Corrigir NEXT_PUBLIC_API_BASE_URL no ambiente Production do projeto Vercel responsável pelo domínio marketing-place-potala.vercel.app e publicar um novo build. Repetir a inspeção da requisição de login antes de concluir a migração.
