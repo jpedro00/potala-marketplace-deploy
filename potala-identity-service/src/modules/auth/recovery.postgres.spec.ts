@@ -23,6 +23,7 @@ run('account actions and notifications (native PostgreSQL)', () => {
   const ids: string[] = [];
   const oldEnv = { ...process.env };
   const originalFetch = global.fetch;
+  const findNotices = prisma.notification.findMany.bind(prisma.notification);
   let mail: jest.Mock;
 
   function decrypt(value: string) {
@@ -70,6 +71,14 @@ run('account actions and notifications (native PostgreSQL)', () => {
     await prisma.$connect();
   });
   beforeEach(() => {
+    // Limit dispatch/inbox reads to this proof's fixtures; other local flows retain their queue.
+    jest.spyOn(prisma.notification, 'findMany').mockImplementation(
+      (args) =>
+        findNotices({
+          ...args,
+          where: { AND: [args?.where ?? {}, { userId: { in: ids } }] },
+        }) as never,
+    );
     process.env.ACCOUNT_ACTION_ORIGIN = 'http://localhost:3100';
     process.env.NOTIFICATION_ENCRYPTION_KEY =
       randomBytes(32).toString('base64');
@@ -82,6 +91,7 @@ run('account actions and notifications (native PostgreSQL)', () => {
     global.fetch = mail as typeof fetch;
   });
   afterEach(async () => {
+    jest.restoreAllMocks();
     await prisma.user.deleteMany({ where: { id: { in: ids.splice(0) } } });
   });
   afterAll(async () => {
@@ -244,6 +254,32 @@ run('account actions and notifications (native PostgreSQL)', () => {
       ).status,
     ).toBe('FAILED');
     expect(mail).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards expired or consumed account links before sending a queued email', async () => {
+    for (const consumed of [false, true]) {
+      const account = await user();
+      await recovery.request(account.email, 'PASSWORD_RESET');
+      const token = await prisma.accountActionToken.findFirstOrThrow({
+        where: { userId: account.id },
+      });
+      await prisma.accountActionToken.update({
+        where: { id: token.id },
+        data: consumed
+          ? { consumedAt: new Date() }
+          : { expiresAt: new Date(0) },
+      });
+      const notice = await prisma.notification.findFirstOrThrow({
+        where: { userId: account.id, template: 'PASSWORD_RESET' },
+      });
+      await notifications.dispatch();
+      const current = await prisma.notification.findUniqueOrThrow({
+        where: { id: notice.id },
+      });
+      expect(current.status).toBe('FAILED');
+      expect(current.encryptedPayload).toBeNull();
+    }
+    expect(mail).not.toHaveBeenCalled();
   });
 
   it('never fabricates sent state when transport is missing or rejects; bounds retries', async () => {

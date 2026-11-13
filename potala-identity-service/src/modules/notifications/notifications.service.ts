@@ -156,6 +156,36 @@ export class NotificationsService {
       });
       if (!claimed.count) continue;
       try {
+        if (
+          row.template === 'PASSWORD_RESET' ||
+          row.template === 'EMAIL_CONFIRMATION'
+        ) {
+          const tokenHash = row.idempotencyKey.startsWith('account-action:')
+            ? row.idempotencyKey.slice('account-action:'.length)
+            : '';
+          const action = /^[a-f0-9]{64}$/.test(tokenHash)
+            ? await this.prisma.accountActionToken.findUnique({
+                where: { tokenHash },
+              })
+            : null;
+          if (
+            !action ||
+            action.userId !== row.userId ||
+            action.purpose !== row.template ||
+            action.consumedAt ||
+            action.expiresAt.getTime() <= Date.now()
+          ) {
+            await this.prisma.notification.update({
+              where: { id: row.id },
+              data: {
+                status: 'FAILED',
+                encryptedPayload: null,
+                lockedUntil: null,
+              },
+            });
+            continue;
+          }
+        }
         const recipient = await this.prisma.user.findUniqueOrThrow({
           where: { id: row.userId },
         });
