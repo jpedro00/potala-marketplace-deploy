@@ -1,0 +1,143 @@
+{
+  "scope": "marketplace, one database and four schemas; institutional excluded",
+  "date": "2026-11-17",
+  "initialMigrationsIncluded": false,
+  "migrations": [
+    {
+      "schema": "identity",
+      "name": "20261110000100_admin_access",
+      "file": "identity/20261110000100_admin_access.sql",
+      "sourceSha256": "560c8439ab5cf5b9c9a06552139a90819601bcd00ea08cfdf990805855b13d16",
+      "packageSha256": "b26e09913799f8f471d4484da6ded7a82c66b8110f602b738546295dfba95b23",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "identity",
+      "name": "20261110000200_access_audit",
+      "file": "identity/20261110000200_access_audit.sql",
+      "sourceSha256": "0f9e38c8a7e45735e2d8c5d8c92d8798dd10a299d8c69b8c3fc1bd37d1eecb86",
+      "packageSha256": "f305f298379b5c35d3100dc2e628731288769934f83a4918f927eba04e10bac9",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "identity",
+      "name": "20261111120000_account_actions_notifications",
+      "file": "identity/20261111120000_account_actions_notifications.sql",
+      "sourceSha256": "22b7d4df0ba0a20bee417173c594c77fc77a58d3767e6e9972fc03a790350a0a",
+      "packageSha256": "8d43377d2c909cbb4bed5aab04e25fc62da64ecd65fa3ca525c3729ef8929da6",
+      "previouslyReportedApplied": true
+    },
+    {
+      "schema": "sellers",
+      "name": "20261110150000_seller_payment_preferences",
+      "file": "sellers/20261110150000_seller_payment_preferences.sql",
+      "sourceSha256": "5ef3faa6eb8d383d9e1774e56eda944a5558bc8ae3b92593aa75ee9d0e049513",
+      "packageSha256": "ea97b6223f34d4458c2729e47edacd551a39958a266c5f4f33c2288bc5770740",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "sellers",
+      "name": "20261111150000_partner_legal",
+      "file": "sellers/20261111150000_partner_legal.sql",
+      "sourceSha256": "d12a8a22f89fb7ae6ff18e36536c7df283a4c738a56a844357cfac1962074caa",
+      "packageSha256": "a6350faa3a17e6a2e8f9d34e1d62cc4c9eaa560eba6bc51de02255e7bbfa0538",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "sellers",
+      "name": "20261111170000_delivery_preferences",
+      "file": "sellers/20261111170000_delivery_preferences.sql",
+      "sourceSha256": "5252cdf15bb0c67c661cdf0446c3e70d405a749c56217fe5f5cdaf1b7f1f6b7c",
+      "packageSha256": "e187a226cfc2f6a1f28dbb05e0dd9a83d6ebae313af0bf1bd72d37ca06a33d7c",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "sellers",
+      "name": "20261111180000_seller_notifications",
+      "file": "sellers/20261111180000_seller_notifications.sql",
+      "sourceSha256": "6dc4bcebe5693a8861b4dc4b4797f5f79ae909f6d215ac01bc42a44781315782",
+      "packageSha256": "ce7b8d6894cbd2ecd7dd2028d2fe925093fdc77858599190b7a83f7995add8c3",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "catalog",
+      "name": "20261110120000_activities",
+      "file": "catalog/20261110120000_activities.sql",
+      "sourceSha256": "27c15f6ca3c09932de21a62bbc8b71f22c91f3756efb934b94a6fd6a743d2b9a",
+      "packageSha256": "446caadb6fe0d981a10c134f62106e7535d1d23b0b48f4e0be2b565234e22438",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "catalog",
+      "name": "20261110130000_analytics",
+      "file": "catalog/20261110130000_analytics.sql",
+      "sourceSha256": "729a3c4c2f99990878a30f0b2b16526462c3b7f860a1e102ab4a38fbc67c56a2",
+      "packageSha256": "f6e167df9604c6cddb19a0813d7ce5bc64b453197a8d934478d7b5bafa00d4b1",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "catalog",
+      "name": "20261110150000_analytics_consent",
+      "file": "catalog/20261110150000_analytics_consent.sql",
+      "sourceSha256": "172a16d25d8c9f26c557476022ba43853fb3574fee608cc9fcb289e32f831b80",
+      "packageSha256": "0d4eb1df6f525e1ef0cb36d699df035f7807bbd8b481da6327807708e3175049",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "catalog",
+      "name": "20261110160000_activity_retry_files",
+      "file": "catalog/20261110160000_activity_retry_files.sql",
+      "sourceSha256": "4643cd0dcc8621d32779345aad2ca36f27b7c7d5a68cfa4ce8402d1d8a7567e4",
+      "packageSha256": "1928cba3f371a76cd6d21278f76de290d0bd1f2f3edb8b3ef6f86c15978f174f",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "catalog",
+      "name": "20261111120000_activity_details",
+      "file": "catalog/20261111120000_activity_details.sql",
+      "sourceSha256": "fa225e5be55b8e5a05f28de57fed1e4667d17b164142b6ccf2b49e41667258a3",
+      "packageSha256": "5368bd10d270d8211bd14c56c98559dccbbc40a811f724c07bf94c2f487f3b35",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "catalog",
+      "name": "20261111130000_contact_submissions",
+      "file": "catalog/20261111130000_contact_submissions.sql",
+      "sourceSha256": "1d1a4a02375ab7891148e1381abcfca1b775c50609cbca8793aec66e819379d4",
+      "packageSha256": "947ec77e091aaff1ff7c896f9ecfefea355301a5268bddbc79b826434d952cfe",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "catalog",
+      "name": "20261111140000_product_attributes",
+      "file": "catalog/20261111140000_product_attributes.sql",
+      "sourceSha256": "1077e5188e08bb4467e7ec99ee50ddc76221fc8f86631ae642cc0e8a64afcc64",
+      "packageSha256": "75f3454cd29fa7c4872aa8c6700a16e34f16b6c1523ab7afc47be48cca5c70b9",
+      "previouslyReportedApplied": true
+    },
+    {
+      "schema": "catalog",
+      "name": "20261111150000_partner_legal",
+      "file": "catalog/20261111150000_partner_legal.sql",
+      "sourceSha256": "12a2bc12307b1434168cdbc4dcfcbe89e08a90e9c0f7fded702c91138144c2c5",
+      "packageSha256": "37df5790bf1db8649d85797dedf3cf1ebd07486bb30b0332d767473394a751d0",
+      "previouslyReportedApplied": true
+    },
+    {
+      "schema": "orders",
+      "name": "20261110150000_financial_preparation",
+      "file": "orders/20261110150000_financial_preparation.sql",
+      "sourceSha256": "c088608e3442b52eb161b604e13aa337cd8e3527e6170f8f944278e0d3c5b307",
+      "packageSha256": "e2b8ff4efc206f741354754261520cb2ccecef53b1ec19c4bedd322c37353f8c",
+      "previouslyReportedApplied": false
+    },
+    {
+      "schema": "orders",
+      "name": "20261111170000_shipping_private_fiscal",
+      "file": "orders/20261111170000_shipping_private_fiscal.sql",
+      "sourceSha256": "299b104563fcbe09d66389a1a83bd19be106c1b0b6447d488765e4743b12864b",
+      "packageSha256": "00145811f164434f12a658f3ce79f0d4e9ac332406c4419a7b6831089ce2ae7b",
+      "previouslyReportedApplied": false
+    }
+  ]
+}

@@ -6,6 +6,8 @@ const root=resolve(import.meta.dirname,'..');
 const require=createRequire(import.meta.url);
 const {chromium,expect}=require(join(root,'../marketing-place-potala-frontend/node_modules/@playwright/test'));
 const origin='https://marketing-place-potala.vercel.app';
+const stamp=process.env.VALIDATION_STAMP??new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date()).replaceAll('-','');
+if(!/^\d{8}$/.test(stamp))throw Error('Invalid validation date');
 const results=[];
 const browser=await chromium.launch({channel:'chrome',headless:true});
 try {
@@ -24,12 +26,12 @@ try {
     if(path==='/recuperar-senha'){await expect(page.locator('input[type=email]')).toBeVisible();await expect(page.getByRole('button',{name:'Solicitar instruções'})).toBeVisible();}
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
     results.push({viewport:name,path,status:response?.status(),noHorizontalOverflow:!overflow,passed:response?.status()===200&&!overflow});
-    if(name==='desktop'&&path==='/')await page.screenshot({path:join(root,'artifacts/presentation-home-20261113.png'),fullPage:false});
+    if(name==='desktop'&&path==='/')await page.screenshot({path:join(root,`artifacts/presentation-home-${stamp}.png`),fullPage:false});
    }catch{results.push({viewport:name,path,passed:false,error:'navigation_or_assertion_failed'});}
   }
   results.push({viewport:name,check:'browser-api-target',origins:[...apiOrigins],apiFailures:[...apiFailures],pageErrors,passed:apiOrigins.size>0&&[...apiOrigins].every(v=>v==='https://potala-marketplace-deploy-1.onrender.com')&&apiFailures.size===0&&pageErrors.length===0});
   await context.close();
  }
 } finally {await browser.close();}
-await writeFile(join(root,'artifacts/public-browser-validation-20261113.json'),JSON.stringify({checkedAt:new Date().toISOString(),scope:'production public UI; fresh unsigned contexts; no submissions',results},null,2));
+await writeFile(join(root,`artifacts/public-browser-validation-${stamp}.json`),JSON.stringify({checkedAt:new Date().toISOString(),scope:'production public UI; fresh unsigned contexts; no submissions',results},null,2));
 console.log(JSON.stringify({passed:results.filter(r=>r.passed).length,failed:results.filter(r=>!r.passed).length,results},null,2));

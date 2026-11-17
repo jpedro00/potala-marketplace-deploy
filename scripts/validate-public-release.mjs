@@ -2,6 +2,8 @@
 import {mkdir,writeFile} from 'node:fs/promises';
 const frontend='https://marketing-place-potala.vercel.app';
 const api='https://potala-marketplace-deploy-1.onrender.com/api/v1';
+const stamp=process.env.VALIDATION_STAMP??new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date()).replaceAll('-','');
+if(!/^\d{8}$/.test(stamp))throw Error('Invalid validation date');
 const checks=[];
 async function check(name,url,expected,{method='GET',body,headers={},json=false}={}) {
  const start=performance.now();
@@ -25,5 +27,5 @@ await check('Reset recusa token inválido',api+'/auth/password/reset',[400],{met
 await check('Contato valida campos',api+'/public/contact',[400],{method:'POST',body:{},headers:{origin:frontend}});
 await check('Rotas internas não públicas',api+'/internal/sessions/introspect',[404],{method:'POST',body:{},headers:{origin:frontend}});
 const report={checkedAt:new Date().toISOString(),scope:'public read-only production checks; no authenticated user changes, no real payments or emails',checks,passed:checks.filter(c=>c.passed).length,failed:checks.filter(c=>!c.passed).length};
-await mkdir('artifacts',{recursive:true});await writeFile('artifacts/public-release-validation-20261113.json',JSON.stringify(report,null,2));
+await mkdir('artifacts',{recursive:true});await writeFile(`artifacts/public-release-validation-${stamp}.json`,JSON.stringify(report,null,2));
 console.log(JSON.stringify({passed:report.passed,failed:report.failed,failures:checks.filter(c=>!c.passed),findings:checks.filter(c=>c.testProductTitles?.length||c.summary?.configured===false).map(c=>({name:c.name,summary:c.summary,testProductTitles:c.testProductTitles}))},null,2));

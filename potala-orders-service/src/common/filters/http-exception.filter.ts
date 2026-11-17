@@ -22,6 +22,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
+    let operationalCode: string | undefined;
+    const path = request.path ?? request.url.split('?')[0];
+    const prismaCode =
+      exception instanceof Prisma.PrismaClientKnownRequestError
+        ? exception.code
+        : undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -43,23 +49,47 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         status = HttpStatus.NOT_FOUND;
         message = 'Resource not found';
         error = 'Not Found';
+      } else if (['P2021', 'P2022'].includes(exception.code)) {
+        status = HttpStatus.SERVICE_UNAVAILABLE;
+        message = 'Serviço temporariamente indisponível.';
+        error = 'Service Unavailable';
+        operationalCode = 'DATABASE_SCHEMA_NOT_READY';
+      } else if (
+        ['P1001', 'P1002', 'P1008', 'P1017', 'P2024'].includes(exception.code)
+      ) {
+        status = HttpStatus.SERVICE_UNAVAILABLE;
+        message = 'Serviço temporariamente indisponível.';
+        error = 'Service Unavailable';
+        operationalCode = 'DATABASE_UNAVAILABLE';
       }
+    } else if (exception instanceof Prisma.PrismaClientInitializationError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      message = 'Serviço temporariamente indisponível.';
+      error = 'Service Unavailable';
+      operationalCode = 'DATABASE_UNAVAILABLE';
     }
 
     if (status >= 500) {
       this.logger.error(
-        `${request.method} ${request.url} -> ${status}`,
-        exception instanceof Error ? exception.stack : undefined,
+        JSON.stringify({
+          event: 'request_failed',
+          method: request.method,
+          path,
+          status,
+          code: operationalCode ?? 'INTERNAL_ERROR',
+          ...(prismaCode ? { prismaCode } : {}),
+        }),
       );
     } else {
-      this.logger.warn(`${request.method} ${request.url} -> ${status}`);
+      this.logger.warn(`${request.method} ${path} -> ${status}`);
     }
 
     response.status(status).json({
       statusCode: status,
       error,
       message,
-      path: request.url,
+      path,
+      ...(operationalCode ? { code: operationalCode } : {}),
       timestamp: new Date().toISOString(),
       ...(isProduction || status < 500
         ? {}
